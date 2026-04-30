@@ -1,24 +1,10 @@
-**HawkEye Reloaded**
+**HawkEye Reloaded Continue**
 ===================
 
-HawkEye Reloaded is a continuation of the beloved former "Hawkeye", which is now completely inactive. It gives you the ability to log changes, search through them, rollback, and much, much more.
+**HawkEye Reloaded Continue** is a continuation of the beloved **HawkEye Reloaded** plugin.
 
-----------
+I previously helped with the original HawkEye Reloaded project, and this version aims to keep it alive by providing ongoing updates, maintenance, improvements, and future evolution.
 
-
-```xml
-    <repository>
-        <id>minebuilders-repo</id>
-        <url>http://minebuilders.me:8080/plugin/repository/everything/</url>
-    </repository>
-```
-```xml
-    <dependency>
-        <groupId>uk.co.oliwali</groupId>
-        <artifactId>HawkEye</artifactId>
-        <version>1.7.1</version>
-    </dependency>
-```
 ----------
 
 **Features**:
@@ -38,5 +24,3 @@ HawkEye Reloaded is a continuation of the beloved former "Hawkeye", which is now
 * API so other plugins can interact with the HawkEye database
 
 ----------
-
-**Project Page:** *http://dev.bukkit.org/bukkit-plugins/hawkeye-reload/*
