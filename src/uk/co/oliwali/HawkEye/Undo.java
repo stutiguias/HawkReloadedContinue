@@ -109,7 +109,7 @@ public class Undo implements Runnable {
                 if (entry.getUndo() != null) {
                     Player player = (Player) session.getSender();
                     BlockState state = entry.getUndo().getState();
-                    player.sendBlockChange(state.getLocation(), state.getType(), state.getData().getData());
+                    player.sendBlockChange(state.getLocation(), state.getBlockData());
                 }
             }
             counter++;

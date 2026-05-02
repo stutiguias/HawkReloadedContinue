@@ -26,16 +26,16 @@ public class MonitorWorldListener extends HawkEyeListener {
 		for (BlockState block : event.getBlocks()) {
 
 			//Don't log the bottom block
-			if (block.getType() == Material.MYCEL || block.getType() == Material.DIRT || block.getType() == Material.GRASS) continue;
+			if (block.getType() == Material.MYCELIUM || block.getType() == Material.DIRT || block.getType() == Material.GRASS_BLOCK) continue;
 
 			Location loc = new Location(event.getWorld(), block.getX(), block.getY(), block.getZ());
 			//If a player did it
 			if (event.getPlayer() != null) {
-				consumer.addEntry(new BlockChangeEntry(event.getPlayer(), type, loc, "0", BlockUtil.getBlockString(block)));
+				consumer.addEntry(new BlockChangeEntry(event.getPlayer(), type, loc, BlockUtil.getBlockString(Material.AIR), BlockUtil.getBlockString(block)));
 			}
 			//If the environment did it
 			else {
-				consumer.addEntry(new BlockChangeEntry(ENVIRONMENT, type, loc, "0", BlockUtil.getBlockString(block)));
+				consumer.addEntry(new BlockChangeEntry(ENVIRONMENT, type, loc, BlockUtil.getBlockString(Material.AIR), BlockUtil.getBlockString(block)));
 			}
 		}
 

@@ -13,6 +13,7 @@ import uk.co.oliwali.HawkEye.DataType;
 import uk.co.oliwali.HawkEye.itemserializer.ItemSerializer;
 import uk.co.oliwali.HawkEye.util.BlockUtil;
 import uk.co.oliwali.HawkEye.util.EntityUtil;
+import uk.co.oliwali.HawkEye.util.PlayerIdentity;
 
 import java.sql.Timestamp;
 /**
@@ -24,18 +25,30 @@ public class HangingEntry extends DataEntry {
 
     private static ItemSerializer serializer = new ItemSerializer();
 
-	public HangingEntry(String player, Timestamp timestamp, int dataId, DataType type, String data, String world, int x, int y, int z) {
-		super(player, timestamp, dataId, type, data, world, x, y, z);
+	public HangingEntry(String playerUuid, String player, Timestamp timestamp, int dataId, DataType type, String data, String world, int x, int y, int z) {
+		super(playerUuid, player, timestamp, dataId, type, data, world, x, y, z);
 	}
 
 	public HangingEntry() { }
 
-	public HangingEntry(String player, DataType type, Location loc, int typeId, int faceId, ItemStack item) {
-		this(player, type, loc, typeId, faceId, serializer.serializeItem(item));
+	public HangingEntry(String player, DataType type, Location loc, String entityType, int faceId, ItemStack item) {
+		this(player, type, loc, entityType, faceId, serializer.serializeItem(item));
 	}
 
-	public HangingEntry(String player, DataType type, Location loc, int typeId, int faceId, String extra) {
-		super(player, type, loc, (typeId + ":" + faceId + ":" + extra) );
+	public HangingEntry(Player player, DataType type, Location loc, String entityType, int faceId, ItemStack item) {
+		this(PlayerIdentity.from(player), type, loc, entityType, faceId, serializer.serializeItem(item));
+	}
+
+	public HangingEntry(String player, DataType type, Location loc, String entityType, int faceId, String extra) {
+		super(player, type, loc, (entityType + ":" + faceId + ":" + extra) );
+	}
+
+	public HangingEntry(Player player, DataType type, Location loc, String entityType, int faceId, String extra) {
+		this(PlayerIdentity.from(player), type, loc, entityType, faceId, extra);
+	}
+
+	public HangingEntry(PlayerIdentity player, DataType type, Location loc, String entityType, int faceId, String extra) {
+		super(player, type, loc, (entityType + ":" + faceId + ":" + extra));
 	}
 
 
@@ -43,7 +56,7 @@ public class HangingEntry extends DataEntry {
 	public String getStringData() {
         String[] args = data.split(":", 3);
 
-        if (args[0].equals("389")) {
+        if (isItemFrame(args[0])) {
             ItemStack item = serializer.buildItemFromString(args[2]);
             return "ItemFrame" + (item.getType().equals(Material.AIR) ? "" : " with " + BlockUtil.formatItemStack(item));
         }
@@ -57,18 +70,16 @@ public class HangingEntry extends DataEntry {
 
         BlockFace face = EntityUtil.getFaceFromInt(Integer.parseInt(args[1]));
 
-       // EntityUtil.spawnFrame(block, face, (type == 389)); // 1.7 hack to properly place itemframes, no longer needed in 1.8
-
 		//This can and WILL throw exceptions - I believe it's a bug with spigot's API
 		try {
-			if (args[0].equals("389")) {
+			if (isItemFrame(args[0])) {
 				ItemFrame itemframe = block.getWorld().spawn(block.getLocation(), ItemFrame.class);
 				itemframe.setFacingDirection(face.getOppositeFace(), true);
 				itemframe.setItem(serializer.buildItemFromString(args[2]));
 			} else {
 				Painting painting = block.getWorld().spawn(block.getLocation(), Painting.class);
 				painting.setFacingDirection(face.getOppositeFace(), true);
-				painting.setArt(Art.getById(Integer.parseInt(args[2])));
+				painting.setArt(parseArt(args[2]));
 			}
 		} catch (Exception e) {
 			return false; //The exception thrown is known, and shouldn't be printed
@@ -89,5 +100,12 @@ public class HangingEntry extends DataEntry {
 		return true;
 	}
 
+	private boolean isItemFrame(String entityType) {
+		return "item_frame".equalsIgnoreCase(entityType);
+	}
+
+	private Art parseArt(String artName) {
+		return Art.valueOf(artName.toUpperCase());
+	}
 
 }

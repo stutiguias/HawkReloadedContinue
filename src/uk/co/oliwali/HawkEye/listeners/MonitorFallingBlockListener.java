@@ -14,6 +14,8 @@ import uk.co.oliwali.HawkEye.HawkEvent;
 import uk.co.oliwali.HawkEye.HawkEye;
 import uk.co.oliwali.HawkEye.database.Consumer;
 import uk.co.oliwali.HawkEye.entry.BlockChangeEntry;
+import uk.co.oliwali.HawkEye.util.BlockUtil;
+import uk.co.oliwali.HawkEye.util.PlayerIdentity;
 
 import java.util.HashMap;
 
@@ -24,7 +26,7 @@ import java.util.HashMap;
  */
 public class MonitorFallingBlockListener extends HawkEyeListener {
 
-	private HashMap<Entity, String> blocks = new HashMap<Entity, String>();
+	private HashMap<Entity, PlayerIdentity> blocks = new HashMap<Entity, PlayerIdentity>();
 
 	public MonitorFallingBlockListener(Consumer consumer) {
 		super(consumer);
@@ -33,30 +35,29 @@ public class MonitorFallingBlockListener extends HawkEyeListener {
 	@HawkEvent(dataType = DataType.FALLING_BLOCK)
 	public void onBlockPlace(BlockPlaceEvent event) {
 		Material type = event.getBlock().getType();
-		if ((type.equals(Material.SAND) || type.equals(Material.GRAVEL) || type.equals(Material.ANVIL)) && event.getBlock().getRelative(BlockFace.DOWN).getType().equals(Material.AIR)) {
+		if (BlockUtil.isTrackedFallingBlock(type) && event.getBlock().getRelative(BlockFace.DOWN).getType().equals(Material.AIR)) {
 			final BlockPlaceEvent finalEvent = event;
 			Bukkit.getScheduler().scheduleSyncDelayedTask(HawkEye.getInstance(), new Runnable() {
 				@Override
 				public void run() {
-					Location l = finalEvent.getBlock().getLocation();
-					for (Entity e : l.getWorld().getEntitiesByClass(FallingBlock.class)) {
-						if (l.distanceSquared(e.getLocation()) <= 0.8) {
-							blocks.put(e, finalEvent.getPlayer().getName());
-							return;
+						Location l = finalEvent.getBlock().getLocation();
+						for (Entity e : l.getWorld().getEntitiesByClass(FallingBlock.class)) {
+							if (l.distanceSquared(e.getLocation()) <= 0.8) {
+								blocks.put(e, PlayerIdentity.from(finalEvent.getPlayer()));
+								return;
+							}
 						}
-					}
 				}
 			}, 6L);
 		}
 	}
 
-	@HawkEvent(dataType = DataType.FALLING_BLOCK) 
+	@HawkEvent(dataType = DataType.FALLING_BLOCK)
 	public void onEntityModifyBlock(EntityChangeBlockEvent event) {
 		Entity en = event.getEntity();
 		if (en instanceof FallingBlock && blocks.containsKey(en)) {
-			FallingBlock fb = (FallingBlock)en;
 			Block b = event.getBlock();
-			String data = "" + (fb.getBlockData() == 0?fb.getBlockId():fb.getBlockId() + ":" + fb.getBlockData());
+			String data = BlockUtil.getBlockString(event.getBlockData());
 			consumer.addEntry(new BlockChangeEntry(blocks.get(en), DataType.FALLING_BLOCK, b.getLocation(), event.getBlock().getState(), data));
 		}
 	}

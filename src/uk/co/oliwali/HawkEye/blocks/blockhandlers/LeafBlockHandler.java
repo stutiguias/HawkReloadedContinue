@@ -21,7 +21,7 @@ public class LeafBlockHandler extends DefaultBlockHandler {
         for (BlockFace face : BlockUtil.faces) {
 
             Block attch = b.getRelative(face);
-            BlockHandler hb = hawkBlockContainer.getBlockHandler(attch.getTypeId());
+            BlockHandler hb = hawkBlockContainer.getBlockHandler(attch.getType());
 
             if (hb.isAttached()) {
                 hb.logAttachedBlocks(consumer, attch, p, type);

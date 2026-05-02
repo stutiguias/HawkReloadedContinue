@@ -12,11 +12,15 @@ import java.sql.Timestamp;
  */
 public class ContainerInsert extends ContainerEntry {
 
-    public ContainerInsert(String player, Timestamp timestamp, int dataId, DataType type, String data, String world, int x, int y, int z) {
-        super(player, timestamp, dataId, type, data, world, x, y, z);
+    public ContainerInsert(String playerUuid, String player, Timestamp timestamp, int dataId, DataType type, String data, String world, int x, int y, int z) {
+        super(playerUuid, player, timestamp, dataId, type, data, world, x, y, z);
     }
 
     public ContainerInsert(String player, DataType type, Location loc, String serializedData) {
+        super(player, type, loc, serializedData);
+    }
+
+    public ContainerInsert(org.bukkit.entity.Player player, DataType type, Location loc, String serializedData) {
         super(player, type, loc, serializedData);
     }
 

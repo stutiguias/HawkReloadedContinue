@@ -1,5 +1,6 @@
 package uk.co.oliwali.HawkEye.listeners;
 
+
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
@@ -22,6 +23,7 @@ import uk.co.oliwali.HawkEye.entry.DataEntry;
 import uk.co.oliwali.HawkEye.entry.containerentries.ContainerEntry;
 import uk.co.oliwali.HawkEye.entry.containerentries.ContainerExtract;
 import uk.co.oliwali.HawkEye.entry.containerentries.ContainerInsert;
+import uk.co.oliwali.HawkEye.util.BlockUtil;
 import uk.co.oliwali.HawkEye.util.Config;
 import uk.co.oliwali.HawkEye.util.InventoryUtil;
 import uk.co.oliwali.HawkEye.util.Util;
@@ -103,11 +105,11 @@ public class MonitorPlayerListener extends HawkEyeListener {
             Location loc = block.getLocation();
 
             switch (block.getType()) {
-                case SOIL:
+                case FARMLAND:
                     if (event.getAction() == Action.PHYSICAL) {
                         Block rel = block.getRelative(BlockFace.UP);
 
-                        if (blockHandlerContainer.getBlockHandler(rel.getTypeId()) instanceof PlantHandler) {
+                        if (blockHandlerContainer.getBlockHandler(rel.getType()) instanceof PlantHandler) {
                             consumer.addEntry(new BlockEntry(player, DataType.CROP_TRAMPLE, rel));
                         }
                     }
@@ -118,14 +120,14 @@ public class MonitorPlayerListener extends HawkEyeListener {
                 case ANVIL:
                 case BEACON:
                 case BREWING_STAND:
-                case ENDER_CHEST:
-                    if (event.getAction() == Action.RIGHT_CLICK_BLOCK) {
-                        consumer.addEntry(new DataEntry(player, DataType.OPEN_CONTAINER, loc, Integer.toString(block.getTypeId())));
-                    }
-                    break;
-                case WOODEN_DOOR:
-                case TRAP_DOOR:
-                case FENCE_GATE:
+                        case ENDER_CHEST:
+                        if (event.getAction() == Action.RIGHT_CLICK_BLOCK) {
+                            consumer.addEntry(new DataEntry(player, DataType.OPEN_CONTAINER, loc, BlockUtil.getMaterialId(block.getType())));
+                        }
+                        break;
+                case OAK_DOOR:
+                case OAK_TRAPDOOR:
+                case OAK_FENCE_GATE:
                     consumer.addEntry(new DataEntry(player, DataType.DOOR_INTERACT, loc, ""));
                     break;
                 case LEVER:
@@ -140,7 +142,7 @@ public class MonitorPlayerListener extends HawkEyeListener {
 
             if (event.getAction() == Action.RIGHT_CLICK_BLOCK) {
                 Location locs = block.getLocation();
-                if (player.getItemInHand().getType().equals(Material.MONSTER_EGG)) {
+                if (player.getItemInHand().getType().name().endsWith("_SPAWN_EGG")) {
                     consumer.addEntry(new DataEntry(player, DataType.SPAWNMOB_EGG, locs, ""));
                 }
             }
@@ -151,11 +153,7 @@ public class MonitorPlayerListener extends HawkEyeListener {
     public void onPlayerDropItem(PlayerDropItemEvent event) {
         Player player = event.getPlayer();
         ItemStack stack = event.getItemDrop().getItemStack();
-        String data = null;
-        if (stack.getDurability() != 0)
-            data = stack.getAmount() + "x " + stack.getTypeId() + ":" + stack.getData().getData();
-        else
-            data = stack.getAmount() + "x " + stack.getTypeId();
+        String data = BlockUtil.getItemDataString(stack);
         consumer.addEntry(new DataEntry(player, DataType.ITEM_DROP, player.getLocation().getBlock().getLocation(), data));
     }
 
@@ -163,11 +161,7 @@ public class MonitorPlayerListener extends HawkEyeListener {
     public void onPlayerPickupItem(PlayerPickupItemEvent event) {
         Player player = event.getPlayer();
         ItemStack stack = event.getItem().getItemStack();
-        String data = null;
-        if (stack.getDurability() != 0)
-            data = stack.getAmount() + "x " + stack.getTypeId() + ":" + stack.getData().getData();
-        else
-            data = stack.getAmount() + "x " + stack.getTypeId();
+        String data = BlockUtil.getItemDataString(stack);
         consumer.addEntry(new DataEntry(player, DataType.ITEM_PICKUP, player.getLocation().getBlock().getLocation(), data));
     }
 
@@ -175,22 +169,22 @@ public class MonitorPlayerListener extends HawkEyeListener {
     public void onPlayerBucketEmpty(PlayerBucketEmptyEvent event) {
         Location loc = event.getBlockClicked().getRelative(event.getBlockFace()).getLocation();
         DataType type = (event.getBucket().equals(Material.WATER_BUCKET) ? DataType.WATER_BUCKET : DataType.LAVA_BUCKET);
-
-        consumer.addEntry(new BlockChangeEntry(event.getPlayer(), type, loc, loc.getBlock().getState(), event.getBucket().getId()));
+        Material placedMaterial = event.getBucket().equals(Material.WATER_BUCKET) ? Material.WATER : Material.LAVA;
+        consumer.addEntry(new BlockChangeEntry(event.getPlayer(), type, loc, loc.getBlock().getState(), BlockUtil.getBlockString(placedMaterial)));
     }
 
     @HawkEvent(dataType = {DataType.CONTAINER_EXTRACT, DataType.CONTAINER_INSERT})
     public void onInventoryClose(InventoryCloseEvent event) {
-
-        String player = event.getPlayer().getName();
+        Player player = (Player) event.getPlayer();
+        String playerKey = player.getUniqueId().toString();
         InventoryHolder holder = event.getInventory().getHolder();
 
-        if (InventoryUtil.isHolderValid(holder) && invTransactions.containsKey(player)) {
+        if (InventoryUtil.isHolderValid(holder) && invTransactions.containsKey(playerKey)) {
 
-            List<ItemStack> oldInv = invTransactions.get(player);
+            List<ItemStack> oldInv = invTransactions.get(playerKey);
 
             if (oldInv != null) {
-                invTransactions.remove(player);
+                invTransactions.remove(playerKey);
 
                 List<ItemStack>[] dif = InventoryUtil.getDifference(oldInv, InventoryUtil.compressInventory(holder.getInventory().getContents()));
 
@@ -210,11 +204,11 @@ public class MonitorPlayerListener extends HawkEyeListener {
 
     @HawkEvent(dataType = {DataType.CONTAINER_EXTRACT, DataType.CONTAINER_INSERT})
     public void onInventoryOpen(InventoryOpenEvent event) {
-        String player = event.getPlayer().getName();
+        Player player = (Player) event.getPlayer();
         InventoryHolder holder = event.getInventory().getHolder();
 
         if (InventoryUtil.isHolderValid(holder)) {
-            invTransactions.put(player, InventoryUtil.compressInventory(holder.getInventory().getContents()));
+            invTransactions.put(player.getUniqueId().toString(), InventoryUtil.compressInventory(holder.getInventory().getContents()));
         }
     }
 

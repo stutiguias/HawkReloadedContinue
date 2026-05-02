@@ -64,7 +64,7 @@ general:
     debug-level: low
     max-radius: 0
     give-user-tool: true
-    tool-block: '17'
+    tool-block: minecraft:oak_log
     default-here-radius: 5
     default-tool-command: ''
     check-for-updates: true
@@ -94,7 +94,7 @@ command-filter:
 - /register
 - /spawn
 block-filter:
-#- 0
+#- minecraft:stone
 containertransaction-filter:
     chest: true
     doublechest: true

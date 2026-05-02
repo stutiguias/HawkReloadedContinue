@@ -1,5 +1,7 @@
 package uk.co.oliwali.HawkEye.database.userqueries;
 
+import org.bukkit.Bukkit;
+import org.bukkit.OfflinePlayer;
 import uk.co.oliwali.HawkEye.DataType;
 import uk.co.oliwali.HawkEye.SearchParser;
 import uk.co.oliwali.HawkEye.callbacks.QueryCallback;
@@ -14,6 +16,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Threadable class for performing a search query
@@ -33,10 +36,10 @@ public class SearchQuery extends Query<QueryCallback, List<DataEntry>> {
 
     @Override
     protected QueryBuilder initializeQueryBuilder() {
-        return new QueryBuilder("SELECT D.*, P.player, W.world " +
+        return new QueryBuilder("SELECT D.*, W.world, P.player_name " +
                 "FROM " + Config.DbHawkEyeTable + " D " +
-                "INNER JOIN " + Config.DbPlayerTable + " P ON P.player_id=D.player_id " +
-                "INNER JOIN " + Config.DbWorldTable + " W on W.world_id=D.world_id");
+                "INNER JOIN " + Config.DbWorldTable + " W ON W.world_id=D.world_id " +
+                "LEFT JOIN " + Config.DbPlayerTable + " P ON P.player_uuid=D.player_uuid");
     }
 
 
@@ -53,19 +56,24 @@ public class SearchQuery extends Query<QueryCallback, List<DataEntry>> {
             //Retrieve results
             while (res.next()) {
 
-                type = DataType.fromId(res.getInt(4));
+                type = DataType.fromId(res.getInt("action"));
+
+                String playerUuid = res.getString("player_uuid");
+                String playerName = res.getString("player_name");
+                if (playerName == null) playerName = resolvePlayerName(playerUuid);
 
                 results.add(
                         type.getEntryConstructor().newInstance(
-                                res.getString(10),               //Username
-                                res.getTimestamp(2),//Timestamp of entry
-                                res.getInt(1),      //dataId
-                                type,               //Data-Type
-                                res.getString(9),   //Raw-Data
-                                res.getString(11),              //World Name
-                                res.getInt(6),      //X
-                                res.getInt(7),      //Y
-                                res.getInt(8)       //Z
+                                playerUuid,
+                                playerName,
+                                res.getTimestamp("timestamp"),
+                                res.getInt("data_id"),
+                                type,
+                                res.getString("data"),
+                                res.getString("world"),
+                                res.getInt("x"),
+                                res.getInt("y"),
+                                res.getInt("z")
                         ));
             }
         }
@@ -73,5 +81,15 @@ public class SearchQuery extends Query<QueryCallback, List<DataEntry>> {
         Util.debug(results.size() + " results found");
 
         return results;
+    }
+
+    private String resolvePlayerName(String uuid) {
+        if (uuid == null) return null;
+        try {
+            OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(UUID.fromString(uuid));
+            return offlinePlayer.getName();
+        } catch (IllegalArgumentException e) {
+            return uuid;
+        }
     }
 }

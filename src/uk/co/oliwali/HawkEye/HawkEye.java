@@ -53,14 +53,6 @@ public class HawkEye extends JavaPlugin {
     public void onEnable() {
         version = getDescription().getVersion();
 
-        //Setup metrics
-        try {
-            Metrics metrics = new Metrics(this);
-            metrics.start();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
         PluginManager pm = getServer().getPluginManager();
 
         //Check bukkit dependencies
@@ -137,11 +129,11 @@ public class HawkEye extends JavaPlugin {
                 @Override
                 public void run() {
                     try {
-                        Class.forName("com.sk89q.worldedit.extent.logging.AbstractLoggingExtent");
+                        Class.forName("com.sk89q.worldedit.extent.AbstractDelegateExtent");
                         new WESessionFactory(dbmanager.getConsumer());
                     } catch (ClassNotFoundException ex) {
                         Util.warning("[!] Failed to initialize WorldEdit logging [!]");
-                        Util.warning("[!] Please upgrade WorldEdit to 6.0+       [!]");
+                        Util.warning("[!] Please upgrade WorldEdit to 7.4+       [!]");
                     }
                 }
             }, 2L);

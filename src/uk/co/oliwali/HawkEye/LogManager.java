@@ -37,7 +37,7 @@ public class LogManager {
 			writer = new BufferedWriter(new FileWriter(new File(HawkEye.getInstance().getDataFolder(), name)));
 			writer.write("|------(Log By " + sender.getName() + ")------|"+"\n");
 			for (DataEntry e : results) {
-				writer.write("ID:" + e.getDataId() + ", " + e.getTimestamp() + ", " + e.getPlayer() + ", " + e.getType().getConfigName()+"\n");
+				writer.write("ID:" + e.getDataId() + ", " + e.getTimestamp() + ", " + (e.getPlayer() != null ? e.getPlayer() : e.getPlayerUuid() != null ? e.getPlayerUuid() : "(environment)") + ", " + e.getType().getConfigName()+"\n");
 				writer.write("Loc: " + e.getWorld() + "," + e.getX() + "," + e.getY() + "," + e.getZ() + " Data: " + e.getStringData()+"\n");
 				writer.write("--"+"\n");
 				i++;

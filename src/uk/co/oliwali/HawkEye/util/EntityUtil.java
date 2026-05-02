@@ -9,6 +9,7 @@ import uk.co.oliwali.HawkEye.entry.HangingEntry;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 public class EntityUtil {
 
@@ -55,10 +56,21 @@ public class EntityUtil {
 
 		if (e instanceof ItemFrame) {
 			ItemFrame frame = (ItemFrame) e;
-			return new HangingEntry(remover, type, e.getLocation().getBlock().getLocation(), 389, getFace(frame.getAttachedFace()), frame.getItem());
+			return new HangingEntry(remover, type, e.getLocation().getBlock().getLocation(), EntityType.ITEM_FRAME.name().toLowerCase(Locale.ROOT), getFace(frame.getAttachedFace()), frame.getItem());
 		} else if (e instanceof Painting) {
 			Painting paint = (Painting) e;
-			return new HangingEntry(remover, type, e.getLocation().getBlock().getLocation(), 321, getFace(paint.getAttachedFace()), Integer.toString(paint.getArt().getId()));
+			return new HangingEntry(remover, type, e.getLocation().getBlock().getLocation(), EntityType.PAINTING.name().toLowerCase(Locale.ROOT), getFace(paint.getAttachedFace()), paint.getArt().name().toLowerCase(Locale.ROOT));
+		}
+		return null;
+	}
+
+	public static HangingEntry getHangingEntry(DataType type, Entity e, Player remover) {
+		if (e instanceof ItemFrame) {
+			ItemFrame frame = (ItemFrame) e;
+			return new HangingEntry(remover, type, e.getLocation().getBlock().getLocation(), EntityType.ITEM_FRAME.name().toLowerCase(Locale.ROOT), getFace(frame.getAttachedFace()), frame.getItem());
+		} else if (e instanceof Painting) {
+			Painting paint = (Painting) e;
+			return new HangingEntry(remover, type, e.getLocation().getBlock().getLocation(), EntityType.PAINTING.name().toLowerCase(Locale.ROOT), getFace(paint.getAttachedFace()), paint.getArt().name().toLowerCase(Locale.ROOT));
 		}
 		return null;
 	}

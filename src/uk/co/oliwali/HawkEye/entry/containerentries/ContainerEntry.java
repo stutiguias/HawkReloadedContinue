@@ -6,10 +6,12 @@ import org.bukkit.block.BlockState;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.entity.Player;
 import uk.co.oliwali.HawkEye.DataType;
 import uk.co.oliwali.HawkEye.entry.DataEntry;
 import uk.co.oliwali.HawkEye.itemserializer.ItemSerializer;
 import uk.co.oliwali.HawkEye.util.BlockUtil;
+import uk.co.oliwali.HawkEye.util.PlayerIdentity;
 import uk.co.oliwali.HawkEye.util.SerializeUtil;
 
 import java.sql.Timestamp;
@@ -25,12 +27,16 @@ public abstract class ContainerEntry extends DataEntry {
         return serializer;
     }
 
-    public ContainerEntry(String player, Timestamp timestamp, int dataId, DataType type, String data, String world, int x, int y, int z) {
-        super(player, timestamp, dataId, type, data, world, x, y, z);
+    public ContainerEntry(String playerUuid, String player, Timestamp timestamp, int dataId, DataType type, String data, String world, int x, int y, int z) {
+        super(playerUuid, player, timestamp, dataId, type, data, world, x, y, z);
     }
 
     public ContainerEntry(String player, DataType type, Location loc, String serializedData) {
         super(player, type, loc, serializedData);
+    }
+
+    public ContainerEntry(Player player, DataType type, Location loc, String serializedData) {
+        super(PlayerIdentity.from(player), type, loc, serializedData);
     }
 
     @Override

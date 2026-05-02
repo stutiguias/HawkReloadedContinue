@@ -18,7 +18,7 @@ public class TallPlantHandler extends DefaultBlockHandler {
     public void logAttachedBlocks(Consumer consumer, Block b, Player p, DataType type) {
         b = b.getRelative(BlockFace.UP);
 
-        while (hawkBlockContainer.getBlockHandler(b.getTypeId()).equals(this)) {
+        while (hawkBlockContainer.getBlockHandler(b.getType()).equals(this)) {
             consumer.addEntry(new BlockEntry(p, type, b));
 
             b = b.getRelative(BlockFace.UP);

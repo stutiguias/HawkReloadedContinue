@@ -11,6 +11,7 @@ import uk.co.oliwali.HawkEye.querybuilder.filters.BasicFilter;
 import uk.co.oliwali.HawkEye.querybuilder.filters.MultiKeyFilter;
 import uk.co.oliwali.HawkEye.querybuilder.filters.RelationalFilter;
 import uk.co.oliwali.HawkEye.util.Config;
+import uk.co.oliwali.HawkEye.util.PlayerIdentity;
 import uk.co.oliwali.HawkEye.util.Util;
 
 import java.sql.Connection;
@@ -50,14 +51,25 @@ public abstract class Query<C extends Callback<V>, V> extends Thread {
 
         QueryBuilder queryBuilder = initializeQueryBuilder();
 
-        //Match players from database list
+        //Match players by UUID
         Util.debug("Building players");
-        if (parser.players.size() >= 1) {
+        if (!parser.players.isEmpty()) {
 
-            MultiKeyFilter filter = new MultiKeyFilter("player");
+            MultiKeyFilter filter = new MultiKeyFilter("D.player_uuid");
 
             for (String value : parser.players) {
-                filter.addKey(value.replace("!", ""), value.startsWith("!"));
+                String name = value.replace("!", "");
+                boolean excluded = value.startsWith("!");
+
+                PlayerIdentity identity = PlayerIdentity.resolve(name);
+
+                if (identity.hasUuid()) {
+                    filter.addKey(identity.getUuid(), excluded);
+                } else {
+                    Util.info("Could not resolve UUID for player '" + name + "' - no results will match this player.");
+                    // Add an impossible UUID so the filter produces no unintended matches
+                    filter.addKey("00000000-0000-0000-0000-000000000000", excluded);
+                }
             }
 
             queryBuilder.addFilter(filter);
@@ -78,7 +90,7 @@ public abstract class Query<C extends Callback<V>, V> extends Thread {
 
         //Compile actions into SQL form
         Util.debug("Building actions");
-        if (parser.actions != null && parser.actions.size() > 0) {
+        if (parser.actions != null && !parser.actions.isEmpty()) {
             List<Integer> acs = new ArrayList<>();
 
             for (DataType act : parser.actions)

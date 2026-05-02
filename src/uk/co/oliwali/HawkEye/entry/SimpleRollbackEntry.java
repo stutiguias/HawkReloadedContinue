@@ -5,6 +5,7 @@ import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import uk.co.oliwali.HawkEye.DataType;
+import uk.co.oliwali.HawkEye.util.PlayerIdentity;
 
 import java.sql.Timestamp;
 
@@ -14,14 +15,19 @@ import java.sql.Timestamp;
  */
 public class SimpleRollbackEntry extends DataEntry {
 
-	public SimpleRollbackEntry(String player, Timestamp timestamp, int dataId, DataType type, String data, String world, int x, int y, int z) {
-		super(player, timestamp, dataId, type, data, world, x, y, z);
+	public SimpleRollbackEntry(String playerUuid, String player, Timestamp timestamp, int dataId, DataType type, String data, String world, int x, int y, int z) {
+		super(playerUuid, player, timestamp, dataId, type, data, world, x, y, z);
 	}
 	
 	public SimpleRollbackEntry() { }
 
 	public SimpleRollbackEntry(Player player, DataType type, Location loc, String data) {
-		this(player.getName(), type, loc, data);
+		this(PlayerIdentity.from(player), type, loc, data);
+	}
+
+	public SimpleRollbackEntry(PlayerIdentity player, DataType type, Location loc, String data) {
+		super(player, type, loc);
+		this.data = data;
 	}
 	public SimpleRollbackEntry(String player, DataType type, Location loc, String data) {
 		super(player, type, loc);
@@ -30,13 +36,13 @@ public class SimpleRollbackEntry extends DataEntry {
 
 	@Override
 	public boolean rollback(Block block) {
-		block.setType(Material.AIR);
+		block.setBlockData(Material.AIR.createBlockData(), false);
 		return true;
 	}
 
 	@Override
 	public boolean rollbackPlayer(Block block, Player player) {
-		player.sendBlockChange(block.getLocation(), Material.AIR, (byte)0);
+		player.sendBlockChange(block.getLocation(), Material.AIR.createBlockData());
 		return true;
 	}
 

@@ -30,7 +30,8 @@ public class HawkEyeAPI {
      */
     @Deprecated
     public static boolean addCustomEntry(JavaPlugin plugin, String action, Player player, Location loc, String data) {
-        return addCustomEntry(plugin, action, player.getName(), loc, data);
+        addEntry(new DataEntry(player, DataType.OTHER, loc, action + "-" + data));
+        return true;
     }
 
     @Deprecated
@@ -43,7 +44,7 @@ public class HawkEyeAPI {
         if (action == null || player == null || loc == null || data == null)
             throw new NullPointerException();
 
-        addEntry(new DataEntry(player, DataType.OTHER, loc, action + "-" + data));
+        addEntry(new DataEntry(PlayerIdentity.resolve(player), DataType.OTHER, loc, action + "-" + data));
     }
 
     /**
@@ -59,7 +60,7 @@ public class HawkEyeAPI {
     public static boolean addEntry(DataEntry entry) {
 
         if (entry.getClass() != entry.getType().getEntryClass() ||
-                entry.getPlayer() == null)
+                entry.getPlayerUuid() == null && entry.getPlayer() == null)
             return false;
 
         HawkEye.getDbmanager().getConsumer().addEntry(entry);

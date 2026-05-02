@@ -4,6 +4,7 @@ import org.bukkit.Location;
 import org.bukkit.block.*;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.entity.Player;
 import uk.co.oliwali.HawkEye.DataType;
 import uk.co.oliwali.HawkEye.database.Consumer;
 import uk.co.oliwali.HawkEye.entry.containerentries.ContainerEntry;
@@ -120,7 +121,7 @@ public class InventoryUtil {
         return lines;
     }
 
-    public static void handleHolderRemoval(Consumer consumer, String remover, BlockState state) {
+    public static void handleHolderRemoval(Consumer consumer, Player remover, BlockState state) {
         InventoryHolder holder = (InventoryHolder) state;
 
         if (InventoryUtil.isHolderValid(holder)) {

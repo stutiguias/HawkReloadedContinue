@@ -1,5 +1,6 @@
 package uk.co.oliwali.HawkEye.listeners;
 
+
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
@@ -16,6 +17,7 @@ import uk.co.oliwali.HawkEye.HawkEvent;
 import uk.co.oliwali.HawkEye.PlayerSession;
 import uk.co.oliwali.HawkEye.database.Consumer;
 import uk.co.oliwali.HawkEye.entry.*;
+import uk.co.oliwali.HawkEye.util.BlockUtil;
 import uk.co.oliwali.HawkEye.util.Config;
 import uk.co.oliwali.HawkEye.util.EntityUtil;
 import uk.co.oliwali.HawkEye.util.Util;
@@ -69,12 +71,8 @@ public class MonitorEntityListener extends HawkEyeListener {
 
             //Log item drops
             if (Config.LogDeathDrops) {
-                String data = null;
                 for (ItemStack stack : event.getDrops()) {
-                    if (stack.getData() != null)
-                        data = stack.getAmount() + "x " + stack.getTypeId() + ":" + stack.getData().getData();
-                    else
-                        data = stack.getAmount() + "x " + stack.getTypeId();
+                    String data = BlockUtil.getItemDataString(stack);
                     consumer.addEntry(new DataEntry(victim, DataType.ITEM_DROP, victim.getLocation(), data));
                 }
             }
@@ -83,7 +81,7 @@ public class MonitorEntityListener extends HawkEyeListener {
             Player killer = ((LivingEntity) entity).getKiller();
 
             if (killer != null) {
-                consumer.addEntry(new EntityEntry(killer.getName(), DataType.ENTITY_KILL, entity.getLocation().getBlock().getLocation(), Util.getEntityName(entity)));
+                consumer.addEntry(new EntityEntry(killer, DataType.ENTITY_KILL, entity.getLocation().getBlock().getLocation(), Util.getEntityName(entity)));
             }
         }
     }
@@ -91,21 +89,29 @@ public class MonitorEntityListener extends HawkEyeListener {
     @HawkEvent(dataType = DataType.EXPLOSION)
     public void onEntityExplode(EntityExplodeEvent event) {
         Entity e = event.getEntity();
-        String s = ENVIRONMENT;
+        Player sourcePlayer = null;
+        String source = ENVIRONMENT;
 
         if (e != null) { //Nullcheck, the entity CAN be null!
             if (e instanceof TNTPrimed) {
-                Entity source = ((TNTPrimed) e).getSource();
-                if (source != null && source instanceof Player)
-                    s = ((Player) source).getName();
-                else s = EntityUtil.entityToString(e);
+                Entity explosionSource = ((TNTPrimed) e).getSource();
+                if (explosionSource instanceof Player) {
+                    sourcePlayer = (Player) explosionSource;
+                } else {
+                    source = EntityUtil.entityToString(e);
+                }
             } else if (e.getType() != null) { //Nullcheck, the entitytype CAN be null!
-                s = EntityUtil.entityToString(e);
+                source = EntityUtil.entityToString(e);
             }
         }
 
-        for (Block b : event.blockList())
-            consumer.addEntry(new BlockEntry(s, DataType.EXPLOSION, b));
+        for (Block b : event.blockList()) {
+            if (sourcePlayer != null) {
+                consumer.addEntry(new BlockEntry(sourcePlayer, DataType.EXPLOSION, b));
+            } else {
+                consumer.addEntry(new BlockEntry(source, DataType.EXPLOSION, b));
+            }
+        }
     }
 
     @HawkEvent(dataType = DataType.ITEM_BREAK)
@@ -124,7 +130,7 @@ public class MonitorEntityListener extends HawkEyeListener {
 
         if (!(event.getRemover() instanceof Player)) return;
 
-        HangingEntry he = EntityUtil.getHangingEntry(DataType.ITEM_BREAK, event.getEntity(), EntityUtil.entityToString(event.getRemover()));
+        HangingEntry he = EntityUtil.getHangingEntry(DataType.ITEM_BREAK, event.getEntity(), (Player) event.getRemover());
 
         if (he != null)
             consumer.addEntry(he);
@@ -146,7 +152,7 @@ public class MonitorEntityListener extends HawkEyeListener {
 
     @HawkEvent(dataType = DataType.ITEM_PLACE)
     public void onHangingPlace(HangingPlaceEvent event) {
-        HangingEntry he = EntityUtil.getHangingEntry(DataType.ITEM_PLACE, event.getEntity(), EntityUtil.entityToString(event.getPlayer()));
+        HangingEntry he = EntityUtil.getHangingEntry(DataType.ITEM_PLACE, event.getEntity(), event.getPlayer());
 
         if (he != null)
             consumer.addEntry(he);
@@ -159,7 +165,11 @@ public class MonitorEntityListener extends HawkEyeListener {
             ItemFrame frame = (ItemFrame) event.getEntity();
 
             if (frame.getItem().getType() != Material.AIR) {
-                consumer.addEntry(new ItemFrameModifyEntry(((HumanEntity)event.getDamager()).getName(), DataType.FRAME_EXTRACT, frame.getLocation(), frame.getItem()));
+                if (event.getDamager() instanceof Player) {
+                    consumer.addEntry(new ItemFrameModifyEntry((Player) event.getDamager(), DataType.FRAME_EXTRACT, frame.getLocation(), frame.getItem()));
+                } else {
+                    consumer.addEntry(new ItemFrameModifyEntry(((HumanEntity) event.getDamager()).getName(), DataType.FRAME_EXTRACT, frame.getLocation(), frame.getItem()));
+                }
             }
         }
     }
@@ -176,7 +186,7 @@ public class MonitorEntityListener extends HawkEyeListener {
 
                 item.setAmount(1);
 
-                consumer.addEntry(new ItemFrameModifyEntry(p.getName(), DataType.FRAME_INSERT, frame.getLocation(), item));
+                consumer.addEntry(new ItemFrameModifyEntry(p, DataType.FRAME_INSERT, frame.getLocation(), item));
             }
         }
     }
@@ -190,7 +200,7 @@ public class MonitorEntityListener extends HawkEyeListener {
 
         // Enderman picking up block
         if (event.getTo() == Material.AIR && DataType.ENDERMAN_PICKUP.isLogged()) {
-            if (block.getType() == Material.WALL_SIGN || block.getType() == Material.SIGN_POST)
+            if (BlockUtil.isSign(block.getType()))
                 consumer.addEntry(new SignEntry(ENVIRONMENT, DataType.SIGN_BREAK, event.getBlock()));
             consumer.addEntry(new BlockEntry(ENVIRONMENT, DataType.ENDERMAN_PICKUP, block));
         } else if (DataType.ENDERMAN_PLACE.isLogged()) {

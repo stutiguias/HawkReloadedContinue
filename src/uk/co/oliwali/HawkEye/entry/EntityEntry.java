@@ -2,8 +2,10 @@ package uk.co.oliwali.HawkEye.entry;
 
 import org.bukkit.Location;
 import org.bukkit.block.Block;
+import org.bukkit.entity.Player;
 import uk.co.oliwali.HawkEye.DataType;
 import uk.co.oliwali.HawkEye.util.EntityUtil;
+import uk.co.oliwali.HawkEye.util.PlayerIdentity;
 
 import java.sql.Timestamp;
 /**
@@ -15,12 +17,16 @@ public class EntityEntry extends DataEntry {
 
 	public EntityEntry() { }
 
-	public EntityEntry(String player, Timestamp timestamp, int dataId, DataType type, String data, String world, int x, int y, int z) {
-		super(player, timestamp, dataId, type, data, world, x, y, z);
+	public EntityEntry(String playerUuid, String player, Timestamp timestamp, int dataId, DataType type, String data, String world, int x, int y, int z) {
+		super(playerUuid, player, timestamp, dataId, type, data, world, x, y, z);
 	}
 	
 	public EntityEntry(String player, DataType type, Location loc, String data) {
 		super(player, type, loc, data);
+	}
+
+	public EntityEntry(Player player, DataType type, Location loc, String data) {
+		super(PlayerIdentity.from(player), type, loc, data);
 	}
 
 	@Override

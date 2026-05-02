@@ -1,5 +1,16 @@
 var filterState = true;
 var resultState = true;
+function normalizeFilterList(value) {
+	value = $.trim(value);
+	if (value === "") {
+		return [];
+	}
+
+	return $.map(value.split(","), function(entry) {
+		entry = $.trim(entry);
+		return entry === "" ? null : entry;
+	});
+}
 $(document).ready(function(){
 	$.get("items.txt",
 		function (data) {
@@ -69,12 +80,12 @@ $(document).ready(function(){
 			
 			var filter = {
 				actions: new Array(),
-				players: $("[name=players]").val().split(","),
+				players: normalizeFilterList($("[name=players]").val()),
 				loc: new Array($("[name=x]").val(), $("[name=y]").val(), $("[name=z]").val()),
 				range: $("[name=range]").val(),
-				keywords: $("[name=keywords]").val().split(","),
-				exclude: $("[name=exclude]").val().split(","),
-				worlds: $("[name=worlds]").val().split(","),
+				keywords: normalizeFilterList($("[name=keywords]").val()),
+				exclude: normalizeFilterList($("[name=exclude]").val()),
+				worlds: normalizeFilterList($("[name=worlds]").val()),
 				dateFrom: $("#dateFrom").val() + " " + $("#timeFrom").val(),
 				dateTo: $("#dateTo").val() + " " + $("#timeTo").val(),
 				block: $("#item").val()
@@ -90,7 +101,8 @@ $(document).ready(function(){
 			var dataString = JSON.stringify(filter);
 			$(".results").html('<div class="loading"></div>');
 			$.getJSON(
-				"interface.php?data=" + dataString,
+				"interface.php",
+				{ data: dataString },
 				function (data) {
 					if (data.error.length > 0)
 						$(".results").html(data.error);

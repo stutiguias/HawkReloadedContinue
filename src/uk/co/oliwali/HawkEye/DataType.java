@@ -105,7 +105,7 @@ public enum DataType {
         this.isLogged = HawkEye.getInstance().getConfig().getBoolean("log." + configName);
 
         try {
-            this.entryConstructor = entryClass.getConstructor(String.class, Timestamp.class, int.class, DataType.class, String.class, String.class, int.class, int.class, int.class);
+            this.entryConstructor = entryClass.getConstructor(String.class, String.class, Timestamp.class, int.class, DataType.class, String.class, String.class, int.class, int.class, int.class);
         } catch (Exception e) {
             e.printStackTrace();
         }

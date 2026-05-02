@@ -1,8 +1,8 @@
 package uk.co.oliwali.HawkEye.blocks.blockhandlers;
 
-import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
+import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.Player;
 import uk.co.oliwali.HawkEye.DataType;
 import uk.co.oliwali.HawkEye.database.Consumer;
@@ -12,8 +12,8 @@ import uk.co.oliwali.HawkEye.util.BlockUtil;
 public class BasicBlockHandler implements BlockHandler {
 
     @Override
-    public void restore(Block b, int id, int data) {
-        b.setTypeIdAndData(id, ((byte) data), false);
+    public void restore(Block b, BlockData blockData) {
+        b.setBlockData(blockData.clone(), false);
     }
 
     @Override
@@ -22,7 +22,7 @@ public class BasicBlockHandler implements BlockHandler {
 
             Block attch = b.getRelative(face);
 
-            if (attch.getType() == Material.WALL_SIGN) {
+            if (BlockUtil.isSign(attch.getType())) {
                 if (DataType.SIGN_BREAK.isLogged())
                     consumer.addEntry(new SignEntry(p, DataType.SIGN_BREAK, attch));
             }

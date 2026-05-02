@@ -28,7 +28,7 @@ public class SessionManager {
 	 * Get a PlayerSession from the list
 	 */
 	public static PlayerSession getSession(CommandSender player) {
-		PlayerSession session = playerSessions.get(player.getName());
+		PlayerSession session = playerSessions.get(getSessionKey(player));
 		if (session == null)
 			session = addSession(player);
 		session.setSender(player);
@@ -39,14 +39,15 @@ public class SessionManager {
 	 * Adds a PlayerSession to the list
 	 */
 	public static PlayerSession addSession(CommandSender player) {
+		String key = getSessionKey(player);
 		PlayerSession session;
-		if (playerSessions.containsKey(player.getName())) {
-			session = playerSessions.get(player.getName());
+		if (playerSessions.containsKey(key)) {
+			session = playerSessions.get(key);
 			session.setSender(player);
 		}
 		else {
 			session = new PlayerSession(player);
-			playerSessions.put(player.getName(), session);
+			playerSessions.put(key, session);
 		}
 		return session;
 	}
@@ -55,6 +56,14 @@ public class SessionManager {
 	 * Removes a PlayerSession to avoid memory leaks
 	 */
 	public static void removeSession(CommandSender player) {
-		playerSessions.remove(player.getName());
+		playerSessions.remove(getSessionKey(player));
+	}
+
+	private static String getSessionKey(CommandSender sender) {
+		if (sender instanceof Player) {
+			return ((Player) sender).getUniqueId().toString();
+		}
+
+		return sender.getName();
 	}
 }

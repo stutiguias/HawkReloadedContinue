@@ -6,6 +6,7 @@ import org.bukkit.block.BlockState;
 import org.bukkit.entity.Player;
 import uk.co.oliwali.HawkEye.DataType;
 import uk.co.oliwali.HawkEye.util.BlockUtil;
+import uk.co.oliwali.HawkEye.util.PlayerIdentity;
 
 import java.sql.Timestamp;
 
@@ -21,8 +22,8 @@ public class BlockChangeEntry extends DataEntry {
     private String to = null;
 
 
-    public BlockChangeEntry(String player, Timestamp timestamp, int dataId, DataType type, String data, String world, int x, int y, int z) {
-        super(player, timestamp, dataId, type, world, x, y, z);
+    public BlockChangeEntry(String playerUuid, String player, Timestamp timestamp, int dataId, DataType type, String data, String world, int x, int y, int z) {
+        super(playerUuid, player, timestamp, dataId, type, world, x, y, z);
 
         String[] info = data.split("-");
 
@@ -34,8 +35,8 @@ public class BlockChangeEntry extends DataEntry {
         this(player, type, loc, BlockUtil.getBlockString(from), BlockUtil.getBlockString(to));
     }
 
-    public BlockChangeEntry(Player player, DataType type, Location loc, BlockState from, int id) {
-        this(player, type, loc, BlockUtil.getBlockString(from), String.valueOf(id));
+    public BlockChangeEntry(PlayerIdentity player, DataType type, Location loc, BlockState from, BlockState to) {
+        this(player, type, loc, BlockUtil.getBlockString(from), BlockUtil.getBlockString(to));
     }
 
     public BlockChangeEntry(String player, DataType type, Location loc, BlockState from, BlockState to) {
@@ -43,16 +44,24 @@ public class BlockChangeEntry extends DataEntry {
     }
 
     public BlockChangeEntry(Player player, DataType type, Location loc, String from, String to) {
-        this(player.getName(), type, loc, from, to);
+        this(PlayerIdentity.from(player), type, loc, from, to);
     }
 
-    public BlockChangeEntry(String player, DataType type, Location loc, int blockfrom, int blockfromdata, int blockto, int blockdatato) {
-        this(player, type, loc,
-                (blockfromdata > 0 ? blockfrom + ":" + blockfromdata : Integer.toString(blockfrom)),
-                (blockdatato > 0 ? blockto + ":" + blockdatato : Integer.toString(blockto)));
+    public BlockChangeEntry(PlayerIdentity player, DataType type, Location loc, String from, String to) {
+        super(player, type, loc);
+        this.from = from;
+        this.to = to;
     }
 
     public BlockChangeEntry(String player, DataType type, Location loc, BlockState from, String to) {
+        this(player, type, loc, BlockUtil.getBlockString(from), to);
+    }
+
+    public BlockChangeEntry(Player player, DataType type, Location loc, BlockState from, String to) {
+        this(PlayerIdentity.from(player), type, loc, BlockUtil.getBlockString(from), to);
+    }
+
+    public BlockChangeEntry(PlayerIdentity player, DataType type, Location loc, BlockState from, String to) {
         this(player, type, loc, BlockUtil.getBlockString(from), to);
     }
 
@@ -64,7 +73,7 @@ public class BlockChangeEntry extends DataEntry {
 
     @Override
     public String getStringData() {
-        if (from.startsWith("0")) return BlockUtil.getBlockStringName(to);
+        if (BlockUtil.isAir(from)) return BlockUtil.getBlockStringName(to);
         return BlockUtil.getBlockStringName(from) + " changed to " + BlockUtil.getBlockStringName(to);
     }
 
@@ -81,7 +90,7 @@ public class BlockChangeEntry extends DataEntry {
 
     @Override
     public boolean rollbackPlayer(Block block, Player player) {
-        player.sendBlockChange(block.getLocation(), BlockUtil.getIdFromString(from), BlockUtil.getDataFromString(from));
+        player.sendBlockChange(block.getLocation(), BlockUtil.getBlockDataFromString(from));
         return true;
     }
 
