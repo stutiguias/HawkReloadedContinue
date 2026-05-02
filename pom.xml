@@ -3,7 +3,7 @@
     
     <groupId>uk.co.oliwali</groupId>
     <artifactId>HawkEye</artifactId>
-    <version>2.01</version>
+    <version>2.02</version>
     <name>HawkEye</name>
     <description>Track those griefers like a bird of prey!</description>
     
@@ -50,9 +50,9 @@
 
         <dependency>
             <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-jdk14</artifactId>
-            <version>1.7.10</version>
-            <scope>compile</scope>
+            <artifactId>slf4j-api</artifactId>
+            <version>1.7.36</version>
+            <scope>provided</scope>
         </dependency>
 
         <dependency>
@@ -86,7 +86,7 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.14.0</version>
                 <configuration>
-                    <release>26</release>
+                    <release>21</release>
                 </configuration>
             </plugin>
 
@@ -101,6 +101,12 @@
                 <artifactId>maven-shade-plugin</artifactId>
                 <version>3.6.1</version>
                 <configuration>
+                    <relocations>
+                        <relocation>
+                            <pattern>com.zaxxer.hikari</pattern>
+                            <shadedPattern>uk.co.oliwali.HawkEye.libs.hikari</shadedPattern>
+                        </relocation>
+                    </relocations>
                     <transformers>
                         <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer" />
                     </transformers>
@@ -109,6 +115,8 @@
                             <artifact>*:*</artifact>
                             <excludes>
                                 <exclude>META-INF/MANIFEST.MF</exclude>
+                                <exclude>META-INF/LICENSE*</exclude>
+                                <exclude>META-INF/NOTICE*</exclude>
                             </excludes>
                         </filter>
                     </filters>

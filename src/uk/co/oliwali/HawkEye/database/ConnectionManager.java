@@ -10,13 +10,7 @@ import java.io.File;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.sql.Connection;
-import java.sql.Driver;
-import java.sql.DriverManager;
-import java.sql.DriverPropertyInfo;
 import java.sql.SQLException;
-import java.sql.SQLFeatureNotSupportedException;
-import java.util.Properties;
-import java.util.logging.Logger;
 
 /**
  * Controls MySQL connection pool using Hikari
@@ -25,26 +19,81 @@ import java.util.logging.Logger;
  */
 public class ConnectionManager implements AutoCloseable {
 
+    private static final String[] DRIVER_CLASS_NAMES = {
+            "com.mysql.cj.jdbc.Driver",
+            "com.mysql.jdbc.Driver"
+    };
+
     private HikariDataSource connectionPool;
-    private Driver registeredDriver;
     private URLClassLoader driverClassLoader;
 
     public ConnectionManager() throws Exception {
-        registeredDriver = registerMySqlDriver();
-
         Util.debug("Attempting to connecting to database...");
 
-        HikariConfig config = new HikariConfig();
+        // Ensure the MySQL driver is loaded (its static initialiser self-registers
+        // it with DriverManager under its own class name - never a HawkEye class).
+        ClassLoader driverLoader = loadMySqlDriver();
 
+        HikariConfig config = new HikariConfig();
         config.setMaximumPoolSize(Config.PoolSize);
         config.setJdbcUrl(buildJdbcUrl());
-
         config.setUsername(Config.DbUser);
         config.setPassword(Config.DbPassword);
-
         config.setAutoCommit(false);
 
-        connectionPool = new HikariDataSource(config);
+        // When the driver came from an external JAR we must tell HikariCP which
+        // classloader to use so it can find the driver class.
+        ClassLoader previous = Thread.currentThread().getContextClassLoader();
+        Thread.currentThread().setContextClassLoader(driverLoader);
+        try {
+            connectionPool = new HikariDataSource(config);
+        } finally {
+            Thread.currentThread().setContextClassLoader(previous);
+        }
+    }
+
+    /**
+     * Returns the ClassLoader that was used to load (and therefore register) the
+     * MySQL driver.  Tries the server/plugin classpath first; falls back to an
+     * external JAR placed in the plugin's {@code /lib} data folder.
+     */
+    private ClassLoader loadMySqlDriver() throws Exception {
+        // 1. Already on the server classpath (Paper bundles mysql-connector-j).
+        for (String name : DRIVER_CLASS_NAMES) {
+            try {
+                Class.forName(name, true, getClass().getClassLoader());
+                Util.debug("MySQL driver found on server classpath: " + name);
+                return getClass().getClassLoader();
+            } catch (ClassNotFoundException ignored) {
+            }
+        }
+
+        // 2. External JAR in <dataFolder>/lib/.
+        File libDir = new File(HawkEye.getInstance().getDataFolder(), "lib");
+        File driverJar = findDriverJar(libDir);
+        if (driverJar == null) {
+            throw new ClassNotFoundException(
+                    "MySQL JDBC driver not found on server classpath and no driver JAR found in "
+                            + libDir.getAbsolutePath()
+                            + ". Place mysql-connector-j.jar there and restart.");
+        }
+
+        driverClassLoader = new URLClassLoader(
+                new URL[]{driverJar.toURI().toURL()},
+                getClass().getClassLoader()
+        );
+
+        for (String name : DRIVER_CLASS_NAMES) {
+            try {
+                Class.forName(name, true, driverClassLoader);
+                Util.debug("Loaded MySQL driver from external JAR: " + driverJar.getName());
+                return driverClassLoader;
+            } catch (ClassNotFoundException ignored) {
+            }
+        }
+
+        throw new ClassNotFoundException(
+                "Unable to load MySQL JDBC driver from " + driverJar.getAbsolutePath());
     }
 
     @Override
@@ -52,12 +101,6 @@ public class ConnectionManager implements AutoCloseable {
         if (connectionPool != null) {
             connectionPool.close();
         }
-
-        if (registeredDriver != null) {
-            DriverManager.deregisterDriver(registeredDriver);
-            registeredDriver = null;
-        }
-
         if (driverClassLoader != null) {
             driverClassLoader.close();
             driverClassLoader = null;
@@ -68,115 +111,25 @@ public class ConnectionManager implements AutoCloseable {
         return connectionPool.getConnection();
     }
 
-    private Driver registerMySqlDriver() throws Exception {
-        Driver driver = instantiateDriver(getClass().getClassLoader());
-        if (driver != null) {
-            return registerDriver(driver);
-        }
-
-        File libDirectory = new File(HawkEye.getInstance().getDataFolder(), "lib");
-        File driverJar = findDriverJar(libDirectory);
-
-        if (driverJar == null) {
-            throw new ClassNotFoundException("MySQL JDBC driver not found. Add mysql-connector-java-5.1.49.jar or mysql-connector-j.jar to " + libDirectory.getAbsolutePath());
-        }
-
-        driverClassLoader = new URLClassLoader(new URL[]{driverJar.toURI().toURL()}, getClass().getClassLoader());
-        driver = instantiateDriver(driverClassLoader);
-
-        if (driver == null) {
-            throw new ClassNotFoundException("Unable to load MySQL JDBC driver from " + driverJar.getAbsolutePath());
-        }
-
-        return registerDriver(driver);
-    }
-
-    private Driver instantiateDriver(ClassLoader classLoader) throws Exception {
-        for (String driverClassName : new String[]{"com.mysql.jdbc.Driver", "com.mysql.cj.jdbc.Driver"}) {
-            try {
-                Class<?> driverClass = Class.forName(driverClassName, true, classLoader);
-                return (Driver) driverClass.getDeclaredConstructor().newInstance();
-            } catch (ClassNotFoundException ignored) {
-            }
-        }
-
-        return null;
-    }
-
-    private Driver registerDriver(Driver driver) throws SQLException {
-        Driver shim = new DriverShim(driver);
-        DriverManager.registerDriver(shim);
-        return shim;
-    }
-
     private File findDriverJar(File libDirectory) {
         if (!libDirectory.isDirectory()) {
             return null;
         }
-
-        String[] driverNames = {
+        for (String name : new String[]{
                 "mysql-connector-java-5.1.49.jar",
                 "mysql-connector-java.jar",
                 "mysql-connector-j.jar"
-        };
-
-        for (String driverName : driverNames) {
-            File driverJar = new File(libDirectory, driverName);
-            if (driverJar.isFile()) {
-                return driverJar;
-            }
+        }) {
+            File f = new File(libDirectory, name);
+            if (f.isFile()) return f;
         }
-
-        File[] jarFiles = libDirectory.listFiles((dir, name) -> name.startsWith("mysql-connector") && name.endsWith(".jar"));
-        return jarFiles != null && jarFiles.length > 0 ? jarFiles[0] : null;
+        File[] jars = libDirectory.listFiles(
+                (dir, n) -> n.startsWith("mysql-connector") && n.endsWith(".jar"));
+        return jars != null && jars.length > 0 ? jars[0] : null;
     }
 
     private String buildJdbcUrl() {
         return "jdbc:mysql://" + Config.DbHostname + ":" + Config.DbPort + "/" + Config.DbDatabase
                 + "?rewriteBatchedStatements=true&cachePrepStmts=true&prepStmtCacheSize=275&prepStmtCacheSqlLimit=2048";
     }
-
-    private static final class DriverShim implements Driver {
-        private final Driver delegate;
-
-        private DriverShim(Driver delegate) {
-            this.delegate = delegate;
-        }
-
-        @Override
-        public Connection connect(String url, Properties info) throws SQLException {
-            return delegate.connect(url, info);
-        }
-
-        @Override
-        public boolean acceptsURL(String url) throws SQLException {
-            return delegate.acceptsURL(url);
-        }
-
-        @Override
-        public DriverPropertyInfo[] getPropertyInfo(String url, Properties info) throws SQLException {
-            return delegate.getPropertyInfo(url, info);
-        }
-
-        @Override
-        public int getMajorVersion() {
-            return delegate.getMajorVersion();
-        }
-
-        @Override
-        public int getMinorVersion() {
-            return delegate.getMinorVersion();
-        }
-
-        @Override
-        public boolean jdbcCompliant() {
-            return delegate.jdbcCompliant();
-        }
-
-        @Override
-        public Logger getParentLogger() throws SQLFeatureNotSupportedException {
-            return delegate.getParentLogger();
-        }
-    }
-
 }
