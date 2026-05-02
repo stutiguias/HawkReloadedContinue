@@ -17,6 +17,6 @@ public interface Callback<T> {
      *
      * @param throwable The error thrown from the process
      */
-    void fail(Throwable throwable); //Todo: Implement default when we upgrade to Java 8
+    void fail(Throwable throwable);
 
 }

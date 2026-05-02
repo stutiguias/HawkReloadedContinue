@@ -1,11 +1,13 @@
 package uk.co.oliwali.HawkEye.database;
 
 import org.bukkit.Bukkit;
+import org.bukkit.OfflinePlayer;
 import uk.co.oliwali.HawkEye.HawkEye;
 import uk.co.oliwali.HawkEye.util.Config;
 import uk.co.oliwali.HawkEye.util.Util;
 
 import java.sql.*;
+import java.util.UUID;
 
 /**
  * Handler for everything to do with the database.
@@ -16,9 +18,7 @@ import java.sql.*;
 
 public class DataManager implements AutoCloseable {
 
-    private final IdMapCache playerCache = new IdMapCache();
-
-    private final IdMapCache worldCache = new IdMapCache();
+    private final IdMapCache<Integer> worldCache = new IdMapCache<>();
 
     private DeleteManager deleteManager;
 
@@ -36,7 +36,7 @@ public class DataManager implements AutoCloseable {
 
         connectionManager = new ConnectionManager();
 
-        //Check tables and update player/world lists
+        //Check tables and update world list
         createTables();
 
         if (Config.populateCachesOnBoot)
@@ -72,31 +72,19 @@ public class DataManager implements AutoCloseable {
     }
 
     /**
-     * Get the player cache
-     */
-    public IdMapCache getPlayerCache() {
-        return playerCache;
-    }
-
-    /**
      * Get the world cache
      */
-    public IdMapCache getWorldCache() {
+    public IdMapCache<Integer> getWorldCache() {
         return worldCache;
     }
 
 
     /**
-     * Populates world and player local caches
+     * Populates world local cache
      */
     private void populateCaches() throws Exception {
         try (Connection conn = connectionManager.getConnection();
              Statement stmnt = conn.createStatement()) {
-
-            try (ResultSet res = stmnt.executeQuery("SELECT * FROM `" + Config.DbPlayerTable + "`;")) {
-                while (res.next())
-                    playerCache.put(res.getInt("player_id"), res.getString("player"));
-            }
 
             try (ResultSet res = stmnt.executeQuery("SELECT * FROM `" + Config.DbWorldTable + "`;")) {
                 while (res.next())
@@ -106,25 +94,11 @@ public class DataManager implements AutoCloseable {
     }
 
     /**
-     * Updates a table based on params - Only use on mass changes
-     */
-    private void updateTables(String table, String columns, Statement stmnt, String sql) {
-        try {
-            stmnt.execute(sql);//This is where you create the table - use new + tablename!
-            stmnt.execute("INSERT INTO `new" + table + "` (" + columns + ") SELECT " + columns + " FROM `" + table + "`;");
-            stmnt.execute("RENAME TABLE `" + table + "` TO `old" + table + "`, `new" + table + "` TO `" + table + "`;");
-            stmnt.execute("DROP TABLE `old" + table + "`;");
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-    }
-
-    /**
      * Gets or creates an ID for the provided value
      *
      * @return The ID for the value, or -1 if the method failed
      */
-    public int getKeyId(IdMapCache cache, String table, String idColumn, String column, String value) {
+    public int getKeyId(IdMapCache<Integer> cache, String table, String idColumn, String column, String value) {
         Integer id = cache.get(value);
 
         if (id == null) {
@@ -176,16 +150,8 @@ public class DataManager implements AutoCloseable {
      * @return true on success, false on failure
      */
     private void createTables() throws Exception {
-
         try (Connection conn = connectionManager.getConnection();
              Statement stmnt = conn.createStatement()) {
-
-            String playerTable = "CREATE TABLE IF NOT EXISTS `" + Config.DbPlayerTable + "` (" +
-                    "`player_id` SMALLINT(6) UNSIGNED NOT NULL AUTO_INCREMENT, " +
-                    "`player` varchar(40) CHARACTER SET latin1 COLLATE latin1_general_ci NOT NULL, " +
-                    "PRIMARY KEY (`player_id`), " +
-                    "UNIQUE KEY `player` (`player`)" +
-                    ") COLLATE latin1_general_ci, ENGINE = INNODB;";
 
             String worldTable = "CREATE TABLE IF NOT EXISTS `" + Config.DbWorldTable + "` (" +
                     "`world_id` TINYINT(3) UNSIGNED NOT NULL AUTO_INCREMENT, " +
@@ -194,10 +160,16 @@ public class DataManager implements AutoCloseable {
                     "UNIQUE KEY `world` (`world`)" +
                     ") COLLATE latin1_general_ci, ENGINE = INNODB;";
 
+            String playerTable = "CREATE TABLE `" + Config.DbPlayerTable + "` (" +
+                    "`player_uuid` char(36) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL," +
+                    "`player_name` varchar(40) CHARACTER SET latin1 COLLATE latin1_general_ci DEFAULT NULL," +
+                    "PRIMARY KEY (`player_uuid`)" +
+                    ") ENGINE = INNODB;";
+
             String dataTable = "CREATE TABLE `" + Config.DbHawkEyeTable + "` (" +
                     "`data_id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT," +
                     "`timestamp` datetime NOT NULL," +
-                    "`player_id` SMALLINT(6) UNSIGNED NOT NULL," +
+                    "`player_uuid` char(36) CHARACTER SET ascii COLLATE ascii_general_ci DEFAULT NULL," +
                     "`action` TINYINT(3) UNSIGNED NOT NULL," +
                     "`world_id` TINYINT(3) UNSIGNED NOT NULL," +
                     "`x` int(11) NOT NULL," +
@@ -206,7 +178,7 @@ public class DataManager implements AutoCloseable {
                     "`data` varchar(500) CHARACTER SET latin1 COLLATE latin1_general_ci DEFAULT NULL," +
                     "PRIMARY KEY (`data_id`)," +
                     "KEY `timestamp` (`timestamp`)," +
-                    "KEY `player` (`player_id`)," +
+                    "KEY `player_uuid` (`player_uuid`)," +
                     "KEY `action` (`action`)," +
                     "KEY `world_id` (`world_id`)," +
                     "KEY `x_y_z` (`x`,`y`,`z`)" +
@@ -215,11 +187,6 @@ public class DataManager implements AutoCloseable {
             DatabaseMetaData dbm = conn.getMetaData();
 
             //Check if tables exist
-            if (!JDBCUtil.tableExists(dbm, Config.DbPlayerTable)) {
-                Util.info("Table `" + Config.DbPlayerTable + "` not found, creating...");
-                stmnt.execute(playerTable);
-            }
-
             if (!JDBCUtil.tableExists(dbm, Config.DbWorldTable)) {
                 Util.info("Table `" + Config.DbWorldTable + "` not found, creating...");
                 stmnt.execute(worldTable);
@@ -238,33 +205,181 @@ public class DataManager implements AutoCloseable {
                 Util.debug("HawkEye does not have enough privileges for setting global settings");
             }
 
-            //Here is were the table alterations take place (Aside from alters from making tables)
+            boolean needsDataMigration;
 
-            ResultSet rs = stmnt.executeQuery("SHOW FIELDS FROM `" + Config.DbHawkEyeTable + "` where Field ='action'");
+            try (ResultSet rs = stmnt.executeQuery("SHOW FIELDS FROM `" + Config.DbHawkEyeTable + "` where Field ='action'")) {
+                needsDataMigration = rs.next() && (
+                        !rs.getString(2).contains("tinyint") ||
+                                JDBCUtil.columnExists(dbm, Config.DbHawkEyeTable, "plugin") ||
+                                JDBCUtil.columnExists(dbm, Config.DbHawkEyeTable, "player_id") ||
+                                !JDBCUtil.columnExists(dbm, Config.DbHawkEyeTable, "player_uuid")
+                );
+            }
 
-            //Older hawkeye versions x = double, and contains the column "plugin"
-            if (rs.next() && !rs.getString(2).contains("tinyint") || JDBCUtil.columnExists(dbm, Config.DbHawkEyeTable, "plugin")) {
+            boolean playerTableIsLegacy = JDBCUtil.tableExists(dbm, Config.DbPlayerTable) &&
+                    JDBCUtil.columnExists(dbm, Config.DbPlayerTable, "player_id");
+            boolean playerTableIsNew = JDBCUtil.tableExists(dbm, Config.DbPlayerTable) &&
+                    JDBCUtil.columnExists(dbm, Config.DbPlayerTable, "player_uuid");
 
-                Util.info("Updating " + Config.DbPlayerTable + "...");
-
-                updateTables(Config.DbPlayerTable, "`player_id`,`player`", stmnt, playerTable.replace(Config.DbPlayerTable, "new" + Config.DbPlayerTable));
-
-
-                Util.info("Updating " + Config.DbWorldTable + "...");
-
-                updateTables(Config.DbWorldTable, "`world_id`,`world`", stmnt, worldTable.replace(Config.DbWorldTable, "new" + Config.DbWorldTable));
-
-                Util.info("Updating " + Config.DbHawkEyeTable + "...");
-
-                updateTables(Config.DbHawkEyeTable, "`data_id`,`timestamp`,`player_id`,`action`,`world_id`,`x`,`y`,`z`,`data`", stmnt,
-                        dataTable.replace(Config.DbHawkEyeTable, "new" + Config.DbHawkEyeTable));
-
+            if (needsDataMigration) {
+                Util.info("Migrating " + Config.DbHawkEyeTable + " to UUID-only player identity...");
+                migrateDataTable(conn, stmnt, dbm, dataTable);
                 Util.info("Finished!");
+            } else if (JDBCUtil.columnExists(dbm, Config.DbHawkEyeTable, "player")) {
+                Util.info("Dropping legacy `player` name column from `" + Config.DbHawkEyeTable + "`...");
+                stmnt.execute("ALTER TABLE `" + Config.DbHawkEyeTable + "` DROP COLUMN `player`;");
+                Util.info("Finished!");
+            }
 
+            // Rebuild or create the player lookup table (UUID-keyed)
+            if (playerTableIsLegacy) {
+                Util.info("Replacing legacy `" + Config.DbPlayerTable + "` with UUID-keyed schema...");
+                stmnt.execute("DROP TABLE `" + Config.DbPlayerTable + "`;");
+                playerTableIsNew = false;
+            }
+
+            if (!playerTableIsNew) {
+                Util.info("Creating player lookup table `" + Config.DbPlayerTable + "`...");
+                stmnt.execute(playerTable);
+                populatePlayerTable(conn);
             }
 
             conn.commit();
         }
+    }
+
+    private void migrateDataTable(Connection conn, Statement stmnt, DatabaseMetaData dbm, String dataTableSql) throws Exception {
+        String newTable = "new" + Config.DbHawkEyeTable;
+        String oldTable = "old" + Config.DbHawkEyeTable;
+
+        if (JDBCUtil.tableExists(dbm, newTable)) {
+            stmnt.execute("DROP TABLE `" + newTable + "`;");
+        }
+
+        if (JDBCUtil.tableExists(dbm, oldTable)) {
+            stmnt.execute("DROP TABLE `" + oldTable + "`;");
+        }
+
+        stmnt.execute(dataTableSql.replace(Config.DbHawkEyeTable, newTable));
+
+        boolean hasLegacyPlayerId = JDBCUtil.columnExists(dbm, Config.DbHawkEyeTable, "player_id");
+        boolean hasPlayerUuid = JDBCUtil.columnExists(dbm, Config.DbHawkEyeTable, "player_uuid");
+        boolean hasPlayerName = JDBCUtil.columnExists(dbm, Config.DbHawkEyeTable, "player");
+
+        String sourceQuery;
+
+        if (hasLegacyPlayerId) {
+            if (!JDBCUtil.tableExists(dbm, Config.DbPlayerTable)) {
+                throw new SQLException("Legacy player table `" + Config.DbPlayerTable + "` is required for migration.");
+            }
+
+            sourceQuery = "SELECT D.data_id, D.timestamp, NULL AS player_uuid, P.player AS player_name, D.action, D.world_id, D.x, D.y, D.z, D.data " +
+                    "FROM `" + Config.DbHawkEyeTable + "` D " +
+                    "LEFT JOIN `" + Config.DbPlayerTable + "` P ON P.player_id = D.player_id " +
+                    "ORDER BY D.data_id ASC";
+        } else if (hasPlayerUuid && hasPlayerName) {
+            sourceQuery = "SELECT data_id, timestamp, player_uuid, player AS player_name, action, world_id, x, y, z, data " +
+                    "FROM `" + Config.DbHawkEyeTable + "` ORDER BY data_id ASC";
+        } else if (hasPlayerUuid) {
+            sourceQuery = "SELECT data_id, timestamp, player_uuid, NULL AS player_name, action, world_id, x, y, z, data " +
+                    "FROM `" + Config.DbHawkEyeTable + "` ORDER BY data_id ASC";
+        } else if (hasPlayerName) {
+            sourceQuery = "SELECT data_id, timestamp, NULL AS player_uuid, player AS player_name, action, world_id, x, y, z, data " +
+                    "FROM `" + Config.DbHawkEyeTable + "` ORDER BY data_id ASC";
+        } else {
+            throw new SQLException("Cannot migrate `" + Config.DbHawkEyeTable + "` because no player column is available.");
+        }
+
+        try (PreparedStatement select = conn.prepareStatement(sourceQuery);
+             ResultSet res = select.executeQuery();
+             PreparedStatement insert = conn.prepareStatement(
+                     "INSERT INTO `" + newTable + "` (`data_id`,`timestamp`,`player_uuid`,`action`,`world_id`,`x`,`y`,`z`,`data`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")) {
+
+            int batchCount = 0;
+
+            while (res.next()) {
+                String playerName = res.getString("player_name");
+                String playerUuid = res.getString("player_uuid");
+
+                if (playerUuid == null && playerName != null) {
+                    playerUuid = resolveLegacyPlayerUuid(playerName);
+                }
+
+                insert.setInt(1, res.getInt("data_id"));
+                insert.setTimestamp(2, res.getTimestamp("timestamp"));
+                insert.setString(3, playerUuid);
+                insert.setInt(4, res.getInt("action"));
+                insert.setInt(5, res.getInt("world_id"));
+                insert.setInt(6, res.getInt("x"));
+                insert.setInt(7, res.getInt("y"));
+                insert.setInt(8, res.getInt("z"));
+                insert.setString(9, res.getString("data"));
+                insert.addBatch();
+
+                batchCount++;
+
+                if (batchCount % 1000 == 0) {
+                    insert.executeBatch();
+                }
+            }
+
+            insert.executeBatch();
+        }
+
+        stmnt.execute("RENAME TABLE `" + Config.DbHawkEyeTable + "` TO `" + oldTable + "`, `" + newTable + "` TO `" + Config.DbHawkEyeTable + "`;");
+        stmnt.execute("DROP TABLE `" + oldTable + "`;");
+    }
+
+    private void populatePlayerTable(Connection conn) throws SQLException {
+        try (Statement sel = conn.createStatement();
+             ResultSet res = sel.executeQuery(
+                     "SELECT DISTINCT player_uuid FROM `" + Config.DbHawkEyeTable + "` WHERE player_uuid IS NOT NULL");
+             PreparedStatement upsert = conn.prepareStatement(
+                     "INSERT INTO `" + Config.DbPlayerTable + "` (player_uuid, player_name) VALUES (?, ?) " +
+                     "ON DUPLICATE KEY UPDATE player_name = IF(VALUES(player_name) IS NOT NULL, VALUES(player_name), player_name)")) {
+
+            int count = 0;
+            while (res.next()) {
+                String uuid = res.getString("player_uuid");
+                OfflinePlayer op = Bukkit.getOfflinePlayer(UUID.fromString(uuid));
+                upsert.setString(1, uuid);
+                upsert.setString(2, op != null ? op.getName() : null);
+                upsert.addBatch();
+                if (++count % 100 == 0) upsert.executeBatch();
+            }
+            upsert.executeBatch();
+            conn.commit();
+            Util.info("Populated `" + Config.DbPlayerTable + "` with " + count + " players.");
+        }
+    }
+
+    public void upsertPlayer(String uuid, String name) {
+        if (uuid == null || name == null) return;
+        try (Connection conn = connectionManager.getConnection();
+             PreparedStatement stmnt = conn.prepareStatement(
+                     "INSERT INTO `" + Config.DbPlayerTable + "` (player_uuid, player_name) VALUES (?, ?) " +
+                     "ON DUPLICATE KEY UPDATE player_name = VALUES(player_name)")) {
+            stmnt.setString(1, uuid);
+            stmnt.setString(2, name);
+            stmnt.executeUpdate();
+            conn.commit();
+        } catch (SQLException e) {
+            Util.warning("Failed to upsert player " + uuid + ": " + e.getMessage());
+        }
+    }
+
+    private String resolveLegacyPlayerUuid(String playerName) {
+        if (playerName == null || playerName.isEmpty()) {
+            return null;
+        }
+
+        OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(playerName);
+
+        if (offlinePlayer == null || (!offlinePlayer.isOnline() && !offlinePlayer.hasPlayedBefore())) {
+            return null;
+        }
+
+        return offlinePlayer.getUniqueId().toString();
     }
 
     /**

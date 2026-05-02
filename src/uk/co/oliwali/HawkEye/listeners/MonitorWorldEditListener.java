@@ -45,9 +45,9 @@ public class MonitorWorldEditListener extends HawkEyeListener {
 				Block block = event.getClickedBlock();
 				Material type = block.getType();
 
-				if (type == Material.AIR || Config.BlockFilter.contains(type.getId())) return;
+				if (type == Material.AIR || Config.BlockFilter.contains(type)) return;
 
-				BlockHandler hb = blockHandlerContainer.getBlockHandler(type.getId());
+				BlockHandler hb = blockHandlerContainer.getBlockHandler(type);
 
 				block = hb.getCorrectBlock(block);
 

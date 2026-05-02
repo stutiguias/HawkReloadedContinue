@@ -45,7 +45,7 @@ if ($mysqli->connect_errno) die("Could not connect to MySQL Database!");
 
 if (!$mysqli->set_charset("utf8")) die("Error loading character set utf8.");
 
-function handleError($errno, $errstr, $errfile, $errline, array $errcontext)
+function handleError($errno, $errstr, $errfile, $errline)
 {
 	// error was suppressed with the @-operator
 	if (0 === error_reporting()) return false;

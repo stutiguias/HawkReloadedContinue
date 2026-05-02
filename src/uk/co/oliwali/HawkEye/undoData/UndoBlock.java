@@ -1,5 +1,6 @@
 package uk.co.oliwali.HawkEye.undoData;
 
+
 import org.bukkit.block.BlockState;
 import uk.co.oliwali.HawkEye.HawkEye;
 
@@ -13,9 +14,7 @@ public class UndoBlock {
 
 	public void undo() {
 		if (state != null) {
-			final int id = state.getTypeId();
-			final int data = state.getData().getData();
-			HawkEye.getBlockHandlerContainer().getBlockHandler(id).restore(state.getBlock(), id, data);
+			HawkEye.getBlockHandlerContainer().getBlockHandler(state.getType()).restore(state.getBlock(), state.getBlockData());
 		}
 	}
 

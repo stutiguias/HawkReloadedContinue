@@ -1,16 +1,16 @@
 package uk.co.oliwali.HawkEye;
 
-import com.sk89q.worldedit.bukkit.WorldEditPlugin;
-import com.sk89q.worldedit.bukkit.selections.Selection;
 import org.bukkit.Bukkit;
-import org.bukkit.Material;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.util.Vector;
+import uk.co.oliwali.HawkEye.util.BlockUtil;
 import uk.co.oliwali.HawkEye.util.Config;
 import uk.co.oliwali.HawkEye.util.Util;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -33,8 +33,6 @@ public class SearchParser {
 	public String dateFrom = null;
 	public String dateTo = null;
 	public String[] filters = null;
-
-	private static WorldEditPlugin worldEdit = (WorldEditPlugin) Bukkit.getPluginManager().getPlugin("WorldEdit");
 
 	public SearchParser() { }
 
@@ -105,9 +103,17 @@ public class SearchParser {
 				// Blocks
 				else if (lastParam.equals("b")) {
 					for (int j = 0; j < values.length; j++) {
-						if (Material.getMaterial(values[j]) != null)
-							values[j] = Integer.toString(Material.getMaterial(values[j]).getId());
+						boolean excluded = values[j].startsWith("!");
+						String rawValue = excluded ? values[j].substring(1) : values[j];
+						String normalized = BlockUtil.normalizeBlockString(rawValue);
+
+						if (normalized != null) {
+							values[j] = (excluded ? "!" : "") + "%" + normalized + "%";
+						}
 					}
+
+					if (filters != null) filters = Util.concat(filters, values);
+					else filters = values;
 				}
 				// Actions
 				else if (lastParam.equals("a")) {
@@ -145,18 +151,18 @@ public class SearchParser {
 				// Radius
 				else if (lastParam.equals("r")) {
 					if (!Util.isInteger(values[0])) {
-						if (player instanceof Player && (values[0].equalsIgnoreCase("we") || values[0].equalsIgnoreCase("worldedit")) && worldEdit != null) {
-							Selection sel = worldEdit.getSelection((Player) player);
-							int lRadius = (int) Math.ceil(sel.getLength() / 2);
-							int wRadius = (int) Math.ceil(sel.getWidth() / 2);
-							int hRadius = (int) Math.ceil(sel.getHeight() / 2);
+						if (player instanceof Player && (values[0].equalsIgnoreCase("we") || values[0].equalsIgnoreCase("worldedit")) && hasWorldEdit()) {
+							Object sel = getWorldEditSelection((Player) player);
+							int lRadius = (int) Math.ceil(invokeNumber(sel, "getLength") / 2.0);
+							int wRadius = (int) Math.ceil(invokeNumber(sel, "getWidth") / 2.0);
+							int hRadius = (int) Math.ceil(invokeNumber(sel, "getHeight") / 2.0);
 
 							if (Config.MaxRadius != 0 && (lRadius > Config.MaxRadius || wRadius > Config.MaxRadius || hRadius > Config.MaxRadius))
 								throw new IllegalArgumentException("Selection too large, max radius: &7" + Config.MaxRadius);
 
 							worldedit = true;
-							minLoc = new Vector(sel.getMinimumPoint().getX(), sel.getMinimumPoint().getY(), sel.getMinimumPoint().getZ());
-							maxLoc = new Vector(sel.getMaximumPoint().getX(), sel.getMaximumPoint().getY(), sel.getMaximumPoint().getZ());
+							minLoc = getVectorPoint(sel, "getMinimumPoint");
+							maxLoc = getVectorPoint(sel, "getMaximumPoint");
 						} else if (values[0].equals("*")) {
 							if (!player.hasPermission("hawkeye.override"))
 								throw new IllegalArgumentException("You do not have permission to override the MaxRadius!");
@@ -283,6 +289,88 @@ public class SearchParser {
 
 		}
 
+	}
+
+	private boolean hasWorldEdit() {
+		return Bukkit.getPluginManager().getPlugin("WorldEdit") != null;
+	}
+
+	private Object getWorldEditSelection(Player player) {
+		Object worldEdit = Bukkit.getPluginManager().getPlugin("WorldEdit");
+		if (worldEdit == null) {
+			throw new IllegalArgumentException("WorldEdit is not installed");
+		}
+
+		try {
+			Object session = invokeObject(worldEdit, "getSession", player);
+			Object adaptedWorld = adaptWorldEditWorld(player);
+
+			if (adaptedWorld != null) {
+				try {
+					return invokeObject(session, "getSelection", adaptedWorld);
+				} catch (ReflectiveOperationException ignored) {
+				}
+			}
+
+			return invokeObject(session, "getSelection");
+		} catch (InvocationTargetException ex) {
+			Throwable cause = ex.getCause();
+			if (cause != null && "IncompleteRegionException".equals(cause.getClass().getSimpleName())) {
+				throw new IllegalArgumentException("You do not have a complete WorldEdit selection");
+			}
+			throw new IllegalArgumentException("Unable to read the WorldEdit selection", ex);
+		} catch (ReflectiveOperationException ex) {
+			throw new IllegalArgumentException("Unable to read the WorldEdit selection", ex);
+		}
+	}
+
+	private Object adaptWorldEditWorld(Player player) {
+		try {
+			Class<?> adapterClass = Class.forName("com.sk89q.worldedit.bukkit.BukkitAdapter");
+			Method adaptMethod = adapterClass.getMethod("adapt", org.bukkit.World.class);
+			return adaptMethod.invoke(null, player.getWorld());
+		} catch (ReflectiveOperationException ex) {
+			return null;
+		}
+	}
+
+	private Object invokeObject(Object target, String methodName, Object argument) throws ReflectiveOperationException {
+		for (Method method : target.getClass().getMethods()) {
+			if (!method.getName().equals(methodName) || method.getParameterCount() != 1) {
+				continue;
+			}
+
+			Class<?> parameterType = method.getParameterTypes()[0];
+			if (parameterType.isInstance(argument) || parameterType.isAssignableFrom(argument.getClass())) {
+				return method.invoke(target, argument);
+			}
+		}
+
+		throw new NoSuchMethodException(target.getClass().getName() + "." + methodName + "(...)");
+	}
+
+	private Object invokeObject(Object target, String methodName) throws ReflectiveOperationException {
+		Method method = target.getClass().getMethod(methodName);
+		return method.invoke(target);
+	}
+
+	private double invokeNumber(Object target, String methodName) {
+		try {
+			Method method = target.getClass().getMethod(methodName);
+			Object value = method.invoke(target);
+			return ((Number) value).doubleValue();
+		} catch (ReflectiveOperationException ex) {
+			throw new IllegalArgumentException("Unable to read WorldEdit selection data", ex);
+		}
+	}
+
+	private Vector getVectorPoint(Object target, String methodName) {
+		try {
+			Object point = invokeObject(target, methodName);
+			return new Vector(invokeNumber(point, "x"), invokeNumber(point, "y"), invokeNumber(point, "z"));
+		} catch (ReflectiveOperationException ex) {
+			throw new IllegalArgumentException("Unable to read WorldEdit selection data", ex);
+		}
 	}
 
 }

@@ -1,6 +1,5 @@
 package uk.co.oliwali.HawkEye.itemserializer;
 
-import org.apache.commons.lang.StringUtils;
 import org.bukkit.inventory.ItemStack;
 import uk.co.oliwali.HawkEye.itemserializer.entries.*;
 import uk.co.oliwali.HawkEye.util.BlockUtil;
@@ -30,9 +29,12 @@ public class ItemSerializer {
     }
 
     public ItemStack buildItemFromString(String str) {
-        ItemStack item = BlockUtil.getItemFromString(StringUtils.substringBefore(str, " "));
+        int separatorIndex = str.indexOf(' ');
+        String itemData = separatorIndex >= 0 ? str.substring(0, separatorIndex) : str;
+        String entryData = separatorIndex >= 0 ? str.substring(separatorIndex + 1) : "";
 
-        return applyEntries(item, StringUtils.substringAfter(str, " "));
+        ItemStack item = BlockUtil.getItemFromString(itemData);
+        return applyEntries(item, entryData);
     }
 
     public ItemStack applyEntries(ItemStack item, String str) {

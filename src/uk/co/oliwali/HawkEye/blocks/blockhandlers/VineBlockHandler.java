@@ -1,8 +1,11 @@
 package uk.co.oliwali.HawkEye.blocks.blockhandlers;
 
+
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
+import org.bukkit.block.data.BlockData;
+import org.bukkit.block.data.MultipleFacing;
 import org.bukkit.entity.Player;
 import uk.co.oliwali.HawkEye.DataType;
 import uk.co.oliwali.HawkEye.database.Consumer;
@@ -15,7 +18,7 @@ public class VineBlockHandler implements BlockHandler {
         b = b.getRelative(BlockFace.DOWN);
 
         while (b.getType() == Material.VINE) {
-            Material b2 = b.getRelative(getVineFace(b.getData())).getType();
+            Material b2 = b.getRelative(getVineFace(b.getBlockData())).getType();
 
             if (!b2.isSolid())
                 consumer.addEntry(new BlockEntry(p, type, b));
@@ -31,24 +34,21 @@ public class VineBlockHandler implements BlockHandler {
         return true;
     }
 
-    private BlockFace getVineFace(int data) {
-        switch (data) {
-            case 1:
-                return BlockFace.SOUTH;
-            case 8:
-                return BlockFace.EAST;
-            case 4:
-                return BlockFace.NORTH;
-            case 2:
-                return BlockFace.WEST;
-            default:
-                return BlockFace.NORTH;
+    private BlockFace getVineFace(BlockData blockData) {
+        if (blockData instanceof MultipleFacing multifaced) {
+            for (BlockFace face : new BlockFace[]{BlockFace.SOUTH, BlockFace.EAST, BlockFace.NORTH, BlockFace.WEST}) {
+                if (multifaced.hasFace(face)) {
+                    return face;
+                }
+            }
         }
+
+        return BlockFace.NORTH;
     }
 
     @Override
-    public void restore(Block b, int id, int data) {
-        b.setTypeIdAndData(id, ((byte) data), false);
+    public void restore(Block b, BlockData blockData) {
+        b.setBlockData(blockData.clone(), false);
     }
 
     @Override

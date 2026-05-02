@@ -89,7 +89,7 @@
 									   "43" => "WorldEdit-Placé",
 									   "44" => "Culture piétinée",
 									   "45" => "Bloc mis à feu",
-									   "46" => "Plac. bloc gravité"
+									   "46" => "Plac. bloc gravité",
 									   "47" => "Joueur: Seau de Lave",
 									   "48" => "Joueur: Seau d'eau",
 									   "49" => "Cadre Insertion",

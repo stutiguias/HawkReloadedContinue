@@ -10,6 +10,7 @@ import uk.co.oliwali.HawkEye.DataType;
 import uk.co.oliwali.HawkEye.undoData.UndoBlock;
 import uk.co.oliwali.HawkEye.undoData.UndoChest;
 import uk.co.oliwali.HawkEye.undoData.UndoSign;
+import uk.co.oliwali.HawkEye.util.PlayerIdentity;
 
 import java.sql.Timestamp;
 import java.util.Calendar;
@@ -30,6 +31,8 @@ public class DataEntry {
 
     private Timestamp timestamp;
 
+    private String playerUuid;
+
     private String player;
 
     private String world;
@@ -43,37 +46,50 @@ public class DataEntry {
     public DataEntry() { }
 
     public DataEntry(Player player, DataType type, Location loc) {
-        this(player.getName(), type, loc);
+        this(PlayerIdentity.from(player), type, loc);
     }
 
     public DataEntry(Player player, DataType type, Location loc, String data) {
-        this(player.getName(), type, loc, data);
+        this(PlayerIdentity.from(player), type, loc, data);
     }
 
-    public DataEntry(String player, DataType type, Location loc, String data) {
+    public DataEntry(PlayerIdentity player, DataType type, Location loc, String data) {
         this(player, type, loc);
         this.data = data;
     }
 
-    public DataEntry(String player, DataType type, Location loc) {
+    public DataEntry(String player, DataType type, Location loc, String data) {
+        this(PlayerIdentity.named(player), type, loc, data);
+    }
+
+    public DataEntry(PlayerIdentity player, DataType type, Location loc) {
         this(player, new Timestamp(Calendar.getInstance().getTimeInMillis()), type, loc.getWorld().getName(), loc.getBlockX(), loc.getBlockY(), loc.getBlockZ());
+    }
+
+    public DataEntry(String player, DataType type, Location loc) {
+        this(PlayerIdentity.named(player), type, loc);
     }
 
     /**
      * Used to construct a DataEntry using information obtained from the database
      * This constructor is currently only used by DataType (Cached this constructor using reflection)
      */
-    public DataEntry(String player, Timestamp timestamp, int dataId, DataType type, String data, String world, int x, int y, int z) {
-        this(player, timestamp, dataId, type, world, x, y, z);
+    public DataEntry(String playerUuid, String player, Timestamp timestamp, int dataId, DataType type, String data, String world, int x, int y, int z) {
+        this(playerUuid, player, timestamp, dataId, type, world, x, y, z);
         this.data = data;
     }
 
-    public DataEntry(String player, Timestamp timestamp, int dataId, DataType type, String world, int x, int y, int z) {
-        this(player, timestamp, type, world, x, y, z);
+    public DataEntry(String playerUuid, String player, Timestamp timestamp, int dataId, DataType type, String world, int x, int y, int z) {
+        this(playerUuid, player, timestamp, type, world, x, y, z);
         this.dataId = dataId;
     }
 
-    public DataEntry(String player, Timestamp timestamp, DataType type, String world, int x, int y, int z) {
+    public DataEntry(PlayerIdentity player, Timestamp timestamp, DataType type, String world, int x, int y, int z) {
+        this(player == null ? null : player.getUuid(), player == null ? null : player.getName(), timestamp, type, world, x, y, z);
+    }
+
+    public DataEntry(String playerUuid, String player, Timestamp timestamp, DataType type, String world, int x, int y, int z) {
+        this.playerUuid = playerUuid;
         this.player = player;
         this.timestamp = timestamp;
         this.type = type;
@@ -95,12 +111,25 @@ public class DataEntry {
         this.timestamp = timestamp;
     }
 
+    public String getPlayerUuid() {
+        return playerUuid;
+    }
+
+    public void setPlayerUuid(String playerUuid) {
+        this.playerUuid = playerUuid;
+    }
+
     public String getPlayer() {
         return player;
     }
 
     public void setPlayer(String player) {
         this.player = player;
+    }
+
+    public void setPlayerIdentity(PlayerIdentity player) {
+        this.playerUuid = player == null ? null : player.getUuid();
+        this.player = player == null ? null : player.getName();
     }
 
     public DataType getType() {

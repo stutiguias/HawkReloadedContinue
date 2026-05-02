@@ -15,7 +15,7 @@ public class Config {
 
 	public static Set<String> CommandFilter = new HashSet<>();
 	public static Set<String> IgnoreWorlds = new HashSet<String>();
-	public static Set<Integer> BlockFilter = new HashSet<Integer>();
+	public static Set<Material> BlockFilter = new HashSet<Material>();
 	public static List<String> CleanseActions = new ArrayList<String>();
 	public static int MaxLines = 0;
 	public static int MaxRadius;
@@ -74,7 +74,7 @@ public class Config {
 
 		//Load values
 		CommandFilter = new HashSet<>(config.getStringList("command-filter"));
-		BlockFilter = new HashSet<>(config.getIntegerList("block-filter"));
+		BlockFilter = loadBlockFilter(plugin);
 		IgnoreWorlds = new HashSet<>(config.getStringList("ignore-worlds"));
 		CleanseActions = Arrays.asList(config.getString("general.cleanse-actions").split(","));
 		MaxLines = config.getInt("general.max-lines");
@@ -83,7 +83,7 @@ public class Config {
 		DefaultEditSpeed = config.getInt("general.default-edit-speed");
 		MaxEditSpeed = config.getInt("general.max-edit-speed");
 		DefaultHereRadius = config.getInt("general.default-here-radius");
-		ToolBlock = Material.getMaterial(Integer.parseInt(config.getString("general.tool-block")));
+		ToolBlock = parseToolBlock(plugin, config.getString("general.tool-block"));
 		DefaultToolCommand = config.getString("general.default-tool-command").split(" ");
 		CleanseAge = config.getString("general.cleanse-age");
 		CleansePeriod = config.getString("general.cleanse-period");
@@ -122,5 +122,54 @@ public class Config {
 			DebugLevel = Util.DebugLevel.NONE;
 		}
 
+	}
+
+	private Material parseToolBlock(HawkEye plugin, String configuredValue) {
+		if (configuredValue == null || configuredValue.trim().isEmpty()) {
+			throw new IllegalArgumentException("general.tool-block is missing from config.yml");
+		}
+
+		String value = configuredValue.trim();
+		Material material = BlockUtil.getMaterialFromString(value);
+		String normalized = material == null ? null : BlockUtil.getMaterialId(material);
+
+		if (material != null) {
+			if (!value.equals(normalized)) {
+				config.set("general.tool-block", normalized);
+				plugin.saveConfig();
+			}
+			return material;
+		}
+
+		throw new IllegalArgumentException("Unsupported general.tool-block value '" + configuredValue + "'. Use a namespaced material ID such as minecraft:oak_log.");
+	}
+
+	private Set<Material> loadBlockFilter(HawkEye plugin) {
+		Set<Material> filter = new HashSet<>();
+		List<?> configuredEntries = config.getList("block-filter");
+		if (configuredEntries == null) {
+			return filter;
+		}
+
+		List<String> normalized = new ArrayList<>();
+
+		for (Object entry : configuredEntries) {
+			Material material = BlockUtil.getMaterialFromString(String.valueOf(entry));
+			if (material == null) {
+				Util.warning("Ignoring invalid block-filter entry: " + entry);
+				continue;
+			}
+
+			filter.add(material);
+			normalized.add(BlockUtil.getMaterialId(material));
+		}
+
+		List<String> current = config.getStringList("block-filter");
+		if (!normalized.equals(current)) {
+			config.set("block-filter", normalized);
+			plugin.saveConfig();
+		}
+
+		return filter;
 	}
 }

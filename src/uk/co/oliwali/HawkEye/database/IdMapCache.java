@@ -11,31 +11,31 @@ import java.util.Map;
  * Stores Id and value references in two diffrent maps to insure
  * quick access to both the value and the key
  */
-public class IdMapCache {
+public class IdMapCache<K> {
 
-    private final Map<Integer, String> idMap = new HashMap<>();
+    private final Map<K, String> idMap = new HashMap<>();
 
-    private final Map<String, Integer> valueMap = new HashMap<>();
+    private final Map<String, K> valueMap = new HashMap<>();
 
-    public void put(int id, String value) {
+    public void put(K id, String value) {
         idMap.put(id, value);
         valueMap.put(value, id);
     }
 
-    public void remove(int id, String value) {
+    public void remove(K id, String value) {
         idMap.remove(id);
         valueMap.remove(value);
     }
 
-    public String get(int id) {
+    public String get(K id) {
         return idMap.get(id);
     }
 
-    public Integer get(String value) {
+    public K get(String value) {
         return valueMap.get(value);
     }
 
-    public boolean containsKey(int id) {
+    public boolean containsKey(K id) {
         return idMap.containsKey(id);
     }
 
@@ -43,8 +43,8 @@ public class IdMapCache {
         return valueMap.containsKey(value);
     }
 
-    public Integer searchForId(String value) {
-        Integer id = valueMap.get(value);
+    public K searchForId(String value) {
+        K id = valueMap.get(value);
 
         if (id != null)
             return id;

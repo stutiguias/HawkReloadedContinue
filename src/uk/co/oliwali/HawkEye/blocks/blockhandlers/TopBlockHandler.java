@@ -1,6 +1,8 @@
 package uk.co.oliwali.HawkEye.blocks.blockhandlers;
 
+
 import org.bukkit.block.Block;
+import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.Player;
 import uk.co.oliwali.HawkEye.DataType;
 import uk.co.oliwali.HawkEye.database.Consumer;
@@ -8,8 +10,8 @@ import uk.co.oliwali.HawkEye.database.Consumer;
 public class TopBlockHandler implements BlockHandler {
 
     @Override
-    public void restore(Block b, int id, int data) {
-        b.setTypeIdAndData(id, ((byte) data), false);
+    public void restore(Block b, BlockData blockData) {
+        b.setBlockData(blockData.clone(), false);
     }
 
     @Override

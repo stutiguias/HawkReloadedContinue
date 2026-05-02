@@ -2,7 +2,6 @@ package uk.co.oliwali.HawkEye.worldedit;
 
 import com.sk89q.worldedit.EditSession;
 import com.sk89q.worldedit.WorldEdit;
-import com.sk89q.worldedit.bukkit.BukkitWorld;
 import com.sk89q.worldedit.event.extent.EditSessionEvent;
 import com.sk89q.worldedit.extension.platform.Actor;
 import com.sk89q.worldedit.util.eventbus.Subscribe;
@@ -28,7 +27,7 @@ public class WESessionFactory {
         Actor actor = event.getActor();
         World world = event.getWorld();
 
-        if (actor == null || !(world instanceof BukkitWorld)) {
+        if (actor == null || world == null) {
             Util.warning("Failed to log worldedit actions for world " + (world == null ? "NULL" : world.getName()));
         } else {
             event.setExtent(new HawkSession(consumer, actor, world, event.getExtent()));

@@ -1,9 +1,11 @@
 main: uk.co.oliwali.HawkEye.HawkEye
 name: ${project.name}
 version: ${project.version}
+api-version: '1.21'
 description: ${project.description}
-authors: [oliverw92, GoalieGuy6, bob7l, ELCHILEN0, stutiguias]
-dev-url: http://dev.bukkit.org/server-mods/hawkeye-reload/
+authors: [stutiguias]
+contributors: [oliverw92, GoalieGuy6, bob7l, ELCHILEN0]
+dev-url: https://builtbybit.com/resources/hawkreloadedcontinue.105895/
 softdepend: [WorldEdit, HeroChat]
 commands:
   hawk:

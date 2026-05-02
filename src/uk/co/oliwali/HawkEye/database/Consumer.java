@@ -7,6 +7,9 @@ import uk.co.oliwali.HawkEye.util.Util;
 import java.io.Closeable;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -15,23 +18,19 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class Consumer implements Runnable, Closeable {
 
-    private final String PLAYER_NAME_COLUMN = "player";
-
     private final String WORLD_NAME_COLUMN = "world";
-
-    private final String PLAYER_ID_COLUMN = "player_id";
 
     private final String WORLD_ID_COLUMN = "world_id";
 
     private final LinkedBlockingQueue<DataEntry> queue = new LinkedBlockingQueue<>();
 
-    private final IdMapCache playerDb;
-
-    private final IdMapCache worldDb;
+    private final IdMapCache<Integer> worldDb;
 
     private DataManager dataManager;
 
     private ConnectionManager connectionManager;
+
+    private final ConcurrentHashMap<String, String> playerNameCache = new ConcurrentHashMap<>();
 
     private AtomicBoolean busy = new AtomicBoolean(false);
 
@@ -39,7 +38,6 @@ public class Consumer implements Runnable, Closeable {
         this.dataManager = dataManager;
 
         this.connectionManager = dataManager.getConnectionManager();
-        this.playerDb = dataManager.getPlayerCache();
         this.worldDb = dataManager.getWorldCache();
     }
 
@@ -68,34 +66,42 @@ public class Consumer implements Runnable, Closeable {
 
     @Override
     public void run() {
-        if (queue.isEmpty() || busy.compareAndSet(false, true)) return;
+        if (queue.isEmpty() || !busy.compareAndSet(false, true)) return;
 
         if (queue.size() > 70000)
             Util.info("HawkEye consumer can't keep up! Current Queue: " + queue.size());
 
         try (Connection conn = connectionManager.getConnection();
-             PreparedStatement stmnt = conn.prepareStatement("INSERT IGNORE into `" + Config.DbHawkEyeTable + "` (timestamp, player_id, action, world_id, x, y, z, data, data_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")) {
+             PreparedStatement stmnt = conn.prepareStatement("INSERT IGNORE into `" + Config.DbHawkEyeTable + "` (timestamp, player_uuid, action, world_id, x, y, z, data, data_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")) {
+
+            Map<String, String> playersToUpsert = new LinkedHashMap<>();
 
             for (int i = 0; i < queue.size(); i++) {
 
                 DataEntry entry = queue.poll();
 
-                int playerId = dataManager.getKeyId(playerDb, Config.DbPlayerTable, PLAYER_ID_COLUMN, PLAYER_NAME_COLUMN, entry.getPlayer());
-
-                int worldId = dataManager.getKeyId(worldDb, Config.DbWorldTable, WORLD_ID_COLUMN, WORLD_NAME_COLUMN, entry.getWorld());
-
-                if (playerId < 0) {
-                    Util.debug("Player '" + entry.getPlayer() + "' not found, skipping entry");
+                if (entry == null || entry.getPlayerUuid() == null && entry.getPlayer() == null) {
+                    Util.debug("Entry without actor, skipping");
                     continue;
                 }
+
+                int worldId = dataManager.getKeyId(worldDb, Config.DbWorldTable, WORLD_ID_COLUMN, WORLD_NAME_COLUMN, entry.getWorld());
 
                 if (worldId < 0) {
                     Util.debug("World '" + entry.getWorld() + "' not found, skipping entry");
                     continue;
                 }
 
+                // Track player name changes for hawk_players upsert
+                if (entry.getPlayerUuid() != null && entry.getPlayer() != null) {
+                    String cachedName = playerNameCache.get(entry.getPlayerUuid());
+                    if (!entry.getPlayer().equals(cachedName)) {
+                        playersToUpsert.put(entry.getPlayerUuid(), entry.getPlayer());
+                    }
+                }
+
                 stmnt.setTimestamp(1, entry.getTimestamp());
-                stmnt.setInt(2, playerId);
+                stmnt.setString(2, entry.getPlayerUuid());
                 stmnt.setInt(3, entry.getType().getId());
                 stmnt.setInt(4, worldId);
                 stmnt.setDouble(5, entry.getX());
@@ -106,12 +112,27 @@ public class Consumer implements Runnable, Closeable {
 
                 stmnt.addBatch();
 
-                if (i % 1000 == 0) stmnt.executeBatch(); //If the batchsize is divisible by 1000, execute!
+                if (i % 1000 == 0) stmnt.executeBatch();
             }
 
             stmnt.executeBatch();
-
             conn.commit();
+
+            // Upsert new/renamed players into hawk_players
+            if (!playersToUpsert.isEmpty()) {
+                try (PreparedStatement playerStmnt = conn.prepareStatement(
+                        "INSERT INTO `" + Config.DbPlayerTable + "` (player_uuid, player_name) VALUES (?, ?) " +
+                        "ON DUPLICATE KEY UPDATE player_name = VALUES(player_name)")) {
+                    for (Map.Entry<String, String> e : playersToUpsert.entrySet()) {
+                        playerStmnt.setString(1, e.getKey());
+                        playerStmnt.setString(2, e.getValue());
+                        playerStmnt.addBatch();
+                    }
+                    playerStmnt.executeBatch();
+                    conn.commit();
+                }
+                playerNameCache.putAll(playersToUpsert);
+            }
 
         } catch (Exception ex) {
             Util.warning(ex.getMessage());

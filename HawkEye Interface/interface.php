@@ -22,32 +22,22 @@
 		return error($lang["messages"]["breakMe"]);
 		
 	$data = json_decode(stripslashes($_GET["data"]), true);
+	$data["players"] = normalizeStringFilters($data["players"], false);
+	$data["worlds"] = normalizeStringFilters($data["worlds"], false);
+	$data["keywords"] = normalizeStringFilters($data["keywords"], true);
+	$data["exclude"] = normalizeStringFilters($data["exclude"], true);
+	$data["loc"] = normalizeCoordinateFilters($data["loc"]);
 
 	// Sanitize input
 	foreach ($data["actions"] as $key => $val)
 		$data["actions"][$key] = intval($val);
-	foreach ($data["loc"] as $key => $val)
-		$data["loc"][$key] = intval($val);
-	foreach ($data["keywords"] as $key => $val)
-		$data["keywords"][$key] = $mysqli->real_escape_string($val);
-	foreach ($data["exclude"] as $key => $val)
-		$data["exclude"][$key] = $mysqli->real_escape_string($val);
-
 	$data["block"] = intval($data["block"]);
-	$data["range"] = intval($data["range"]);
-	$data["dateFrom"] = $mysqli->real_escape_string($data["dateFrom"]);
-	$data["dateTo"] = $mysqli->real_escape_string($data["dateTo"]);
+	$data["range"] = trim((string)$data["range"]);
+	if ($data["range"] !== "")
+		$data["range"] = intval($data["range"]);
+	$data["dateFrom"] = $mysqli->real_escape_string(trim((string)$data["dateFrom"]));
+	$data["dateTo"] = $mysqli->real_escape_string(trim((string)$data["dateTo"]));
 		
-	//Get players
-	$players = array();
-	$res = $mysqli->query("SELECT * FROM `" . $hawkConfig["dbPlayerTable"] . "`");
-	if (!$res)
-		return error($mysqli->error);
-	if ($res->num_rows == 0)
-		return error($lang["messages"]["noResults"]);
-	while ($player = $res->fetch_object())
-		$players[$player->player_id] = $player->player;
-	
 	//Get worlds
 	$worlds = array();
 	$res = $mysqli->query("SELECT * FROM `" . $hawkConfig["dbWorldTable"] . "`");
@@ -58,28 +48,30 @@
 	while ($world = $res->fetch_object())
 		$worlds[$world->world_id] = $world->world;
 	
-	$sql = "SELECT * FROM `" . $hawkConfig["dbTable"] . "` WHERE ";
+	$sql = "SELECT D.*, W.world, P.player_name FROM `" . $hawkConfig["dbTable"] . "` D " .
+		"INNER JOIN `" . $hawkConfig["dbWorldTable"] . "` W ON W.world_id = D.world_id " .
+		"LEFT JOIN `" . $hawkConfig["dbPlayerTable"] . "` P ON P.player_uuid = D.player_uuid " .
+		"WHERE ";
 	$args = array();
 	
-	if ($data["players"][0] != "") {
-		$pids = array();
-		foreach ($data["players"] as $key => $val)
-			foreach ($players as $key2 => $val2)
-				if (stristr($val2, $val))
-					array_push($pids, $key2);
-		if (count($pids) > 0)
-			array_push($args, "player_id IN (" . join(",", $pids) . ")");
+	if (count($data["players"]) > 0) {
+		$playerClauses = array();
+		foreach ($data["players"] as $key => $val) {
+			array_push($playerClauses, "P.player_name LIKE '%" . $mysqli->real_escape_string($val) . "%'");
+		}
+		if (count($playerClauses) > 0)
+			array_push($args, "(" . join(" OR ", $playerClauses) . ")");
 		else
 			return error($lang["messages"]["noResults"]);
 	}
-	if ($data["worlds"][0] != "") {
+	if (count($data["worlds"]) > 0) {
 		$wids = array();
 		foreach ($data["worlds"] as $key => $val)
 			foreach ($worlds as $key2 => $val2)
 				if (stristr($val2, $val))
 					array_push($wids, $key2);
 		if (count($wids) > 0)
-			array_push($args, "world_id IN (" . join(",", $wids) . ")");
+			array_push($args, "D.world_id IN (" . join(",", $wids) . ")");
 		else
 			return error($lang["messages"]["noResults"]);
 	}
@@ -89,34 +81,31 @@
 		array_push($args, "`action` IN (" . join(",", $data["actions"]) . ")");
 	
 	$range = $hawkConfig["radius"];
-	if ($data["range"] != "")
+	if ($data["range"] !== "")
 		$range = $data["range"];
-	if ($data["loc"][0] != "")
+	if ($data["loc"][0] !== null)
 		array_push($args, "(`x` BETWEEN " . ($data["loc"][0] - $range) . " AND " . ($data["loc"][0] + $range) . ")");
-	if ($data["loc"][1] != "")
+	if ($data["loc"][1] !== null)
 		array_push($args, "(`y` BETWEEN " . ($data["loc"][1] - $range) . " AND " . ($data["loc"][1] + $range) . ")");
-	if ($data["loc"][2] != "")
+	if ($data["loc"][2] !== null)
 		array_push($args, "(`z` BETWEEN " . ($data["loc"][2] - $range) . " AND " . ($data["loc"][2] + $range) . ")");
 	if ($data["block"] != "00") {
-		if ($data["keywords"][0] == "")
-			$data["keywords"][0] = $data["block"];
-		else
-			array_push($data["keywords"], $data["block"]);
+		array_push($data["keywords"], (string)$data["block"]);
 	}
 	
-	if ($data["dateFrom"] != "" && $data["dateFrom"] != " ")
+	if ($data["dateFrom"] != "")
 		array_push($args, "`timestamp` >= '" . $data["dateFrom"] . "'");
-	if ($data["dateTo"] != "" && $data["dateTo"] != " ")
+	if ($data["dateTo"] != "")
 		array_push($args, "`timestamp` <= '" . $data["dateTo"] . "'");
-	if ($data["keywords"][0] != "") {
+	if (count($data["keywords"]) > 0) {
 		foreach ($data["keywords"] as $key => $val)
 			$data["keywords"][$key] = "'%" . $val . "%'";
-		array_push($args, "`data` LIKE " . join(" OR `data` LIKE ", $data["keywords"]));
+		array_push($args, "(`data` LIKE " . join(" OR `data` LIKE ", $data["keywords"]) . ")");
 	}
-	if ($data["exclude"][0] != "") {
+	if (count($data["exclude"]) > 0) {
 		foreach ($data["exclude"] as $key => $val)
 			$data["exclude"][$key] = "'%" . $val . "%'";
-		array_push($args, "`data` NOT LIKE " . join(" OR `data` LIKE ", $data["exclude"]));
+		array_push($args, "(`data` NOT LIKE " . join(" AND `data` NOT LIKE ", $data["exclude"]) . ")");
 	}
 	
 	//Compile SQL statement
@@ -242,7 +231,7 @@
 				$changeString = "";
 				foreach (explode(",", $fdata) as $change) {
 					$change = trim($change);
-					if (change == "") break;
+					if ($change == "") break;
 					$itemMeta = explode(" ", $change);
 					$itemMaterial = explode(":", array_shift($itemMeta));
 					$itemMaterial[0] = trim(getBlockName($itemMaterial[0]));
@@ -281,7 +270,7 @@
 		$action = str_replace(array_reverse(array_keys($lang["actions"])), array_reverse($lang["actions"]), $action);
 	
 		//Add to output row
-		array_push($row, $entry->data_id, $entry->timestamp, $players[$entry->player_id], $action, $worlds[$entry->world_id], round($entry->x, 1).",".round($entry->y, 1).",".round($entry->z, 1), $fdata);
+		array_push($row, $entry->data_id, $entry->timestamp, $entry->player_name ?? $entry->player_uuid, $action, $worlds[$entry->world_id], round($entry->x, 1).",".round($entry->y, 1).",".round($entry->z, 1), $fdata);
 		array_push($output["data"], $row);
 	}
 	
@@ -312,7 +301,7 @@
 	// Displays an error box with the inputted text
 	*/
 	function error($message) {
-		global $lang;
+		global $lang, $output;
 		$output["error"] = '<div class="ui-widget">
 				<div class="ui-state-highlight ui-corner-all searchError"> 
 					<p><span class="ui-icon ui-icon-alert"></span>
@@ -320,6 +309,40 @@
 				</div>
 			  </div>';
 		echo json_encode($output);
+	}
+
+	function normalizeStringFilters($values, $escape)
+	{
+		global $mysqli;
+
+		$normalized = array();
+		foreach ((array)$values as $value) {
+			$value = trim((string)$value);
+			if ($value === "")
+				continue;
+			if ($escape)
+				$value = $mysqli->real_escape_string($value);
+			array_push($normalized, $value);
+		}
+
+		return $normalized;
+	}
+
+	function normalizeCoordinateFilters($values)
+	{
+		$normalized = array();
+		foreach ((array)$values as $value) {
+			$value = trim((string)$value);
+			if ($value === "")
+				array_push($normalized, null);
+			else
+				array_push($normalized, intval($value));
+		}
+
+		while (count($normalized) < 3)
+			array_push($normalized, null);
+
+		return $normalized;
 	}
 
 ?>

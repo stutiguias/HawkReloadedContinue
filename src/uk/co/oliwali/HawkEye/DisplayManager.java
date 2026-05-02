@@ -56,7 +56,7 @@ public class DisplayManager {
 
             String time = Util.getTime(entry.getTimestamp());
 
-            Util.sendMessage(session.getSender(), " &cID:" + entry.getDataId() + " &7" + time + "&c" + entry.getPlayer() + " &7" + entry.getType().getConfigName());
+            Util.sendMessage(session.getSender(), " &cID:" + entry.getDataId() + " &7" + time + "&c" + (entry.getPlayer() != null ? entry.getPlayer() : entry.getPlayerUuid() != null ? entry.getPlayerUuid() : "(environment)") + " &7" + entry.getType().getConfigName());
             Util.sendMessage(session.getSender(), " &cLoc: &7" + entry.getWorld() + " " + entry.getX() + "," + entry.getY() + "," + entry.getZ() + " &cData: &7" + entry.getStringData());
         }
 
